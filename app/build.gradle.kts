@@ -8,7 +8,7 @@ val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
 android {
     namespace = "com.riderdeck.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.riderdeck.app"
@@ -16,6 +16,10 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
+        // The map engine ships native code; keep only what phones like the iQOO 7 use.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     // One fixed key, so every new build installs over the previous one.
@@ -80,5 +84,5 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.android.gms:play-services-location:21.3.0")
-    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    implementation("org.maplibre.gl:android-sdk:11.8.2")
 }

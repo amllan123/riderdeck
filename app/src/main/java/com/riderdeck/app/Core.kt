@@ -24,10 +24,7 @@ class RiderApp : Application() {
         super.onCreate()
         ctx = applicationContext
         prefs = Prefs(this)
-        org.osmdroid.config.Configuration.getInstance().apply {
-            userAgentValue = packageName
-            load(this@RiderApp, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-        }
+        org.maplibre.android.MapLibre.getInstance(this)
     }
 }
 

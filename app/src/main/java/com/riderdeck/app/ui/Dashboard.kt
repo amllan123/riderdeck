@@ -1,9 +1,6 @@
 package com.riderdeck.app.ui
 
-import android.graphics.Paint
-import android.graphics.drawable.GradientDrawable
 import android.os.SystemClock
-import android.view.MotionEvent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -88,7 +85,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.riderdeck.app.DeviceState
 import com.riderdeck.app.Hub
 import com.riderdeck.app.MainActivity
@@ -104,15 +100,7 @@ import com.riderdeck.app.PlaceSearch
 import com.riderdeck.app.RideState
 import com.riderdeck.app.RiderApp
 import com.riderdeck.app.RiderSettings
-import com.riderdeck.app.darkMapFilter
 import kotlinx.coroutines.delay
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -405,7 +393,7 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
     val ru by Navigator.state.collectAsState()
     val routeCard = ru.loading || ru.route != null
     Box(modifier.panel()) {
-        OsmMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
+        RiderMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
         Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(p.panel.copy(alpha = 0.9f), Color.Transparent))))
         Column(Modifier.align(Alignment.TopStart).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TurnCard(nav, ru, Modifier) {
@@ -599,121 +587,6 @@ fun TurnCard(nav: NavState, ru: RouteUi, modifier: Modifier, onClick: () -> Unit
             }
         }
     }
-}
-
-@Composable
-fun OsmMap(ride: RideState, dark: Boolean, pin: Pin?, follow: Boolean, ru: RouteUi, modifier: Modifier) {
-    val ctx = LocalContext.current
-    val blue = LocalPal.current.blue
-    val map = remember {
-        MapView(ctx).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            isTilesScaledToDpi = true
-            minZoomLevel = 4.0
-            controller.setZoom(17.0)
-            // Dragging or pinching the map stops it from following you.
-            setOnTouchListener { _, e ->
-                if (e.actionMasked == MotionEvent.ACTION_MOVE) Hub.follow.value = false
-                false
-            }
-        }
-    }
-    val me = remember {
-        Marker(map).apply {
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-            setOnMarkerClickListener { _, _ -> true }
-        }
-    }
-    val target = remember {
-        Marker(map).apply {
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            setOnMarkerClickListener { _, _ -> true }
-        }
-    }
-    val line = remember {
-        Polyline(map).apply {
-            outlinePaint.strokeWidth = 18f
-            outlinePaint.strokeCap = Paint.Cap.ROUND
-            outlinePaint.strokeJoin = Paint.Join.ROUND
-            outlinePaint.isAntiAlias = true
-            setOnClickListener { _, _, _ -> true }
-        }
-    }
-    val route = ru.route
-    LaunchedEffect(route, blue) {
-        line.outlinePaint.color = blue.toArgb()
-        if (route == null) {
-            map.overlays.remove(line)
-        } else {
-            line.setPoints(route.points)
-            if (!map.overlays.contains(line)) map.overlays.add(0, line)
-            if (!ru.navigating) {
-                Hub.follow.value = false
-                map.mapOrientation = 0f
-                map.post {
-                    try {
-                        map.zoomToBoundingBox(BoundingBox.fromGeoPoints(route.points).increaseByScale(1.25f), true)
-                    } catch (_: Exception) {
-                    }
-                }
-            }
-        }
-        map.invalidate()
-    }
-    LaunchedEffect(ru.navigating) {
-        if (ru.navigating) {
-            Hub.follow.value = true
-            map.controller.setZoom(17.5)
-        }
-    }
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        map.onResume()
-        onDispose {
-            map.onPause()
-            map.onDetach()
-        }
-    }
-    LaunchedEffect(dark) {
-        map.overlayManager.tilesOverlay.setColorFilter(if (dark) darkMapFilter() else null)
-        map.invalidate()
-    }
-    LaunchedEffect(blue) {
-        me.icon = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(blue.toArgb())
-            setStroke(8, android.graphics.Color.WHITE)
-            setSize(52, 52)
-        }
-    }
-    LaunchedEffect(ride.lat, ride.lon, follow) {
-        if (!ride.hasFix) return@LaunchedEffect
-        me.position = GeoPoint(ride.lat, ride.lon)
-        if (!map.overlays.contains(me)) map.overlays.add(me)
-        if (follow) {
-            map.controller.animateTo(me.position)
-            map.mapOrientation = if (ride.speedKmh > 6f) -ride.bearing else map.mapOrientation
-        }
-        map.invalidate()
-    }
-    LaunchedEffect(pin) {
-        if (pin == null) {
-            map.overlays.remove(target)
-        } else {
-            target.position = GeoPoint(pin.lat, pin.lon)
-            target.title = pin.title
-            if (!map.overlays.contains(target)) map.overlays.add(target)
-            if (ru.route == null && !ru.loading) {
-                Hub.follow.value = false
-                map.mapOrientation = 0f
-                map.controller.setZoom(16.0)
-                map.controller.animateTo(target.position)
-            }
-        }
-        map.invalidate()
-    }
-    AndroidView(factory = { map }, modifier = modifier)
 }
 
 /* ---------------- music ---------------- */

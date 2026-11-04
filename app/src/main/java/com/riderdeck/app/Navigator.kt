@@ -11,18 +11,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import org.osmdroid.util.GeoPoint
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
+/** A plain latitude/longitude pair. */
+data class LL(val lat: Double, val lon: Double)
+
 /** One instruction on the route. [type] uses Valhalla's maneuver numbers (10 = right, 15 = left, 4 = arrive…). */
 data class Maneuver(val type: Int, val instruction: String, val verbal: String, val begin: Int)
 
 class Route(
-    val points: List<GeoPoint>,
+    val points: List<LL>,
     val cum: DoubleArray, // metres from the start to each point
     val maneuvers: List<Maneuver>,
     val lengthM: Double,
@@ -139,7 +141,7 @@ object Navigator {
         val from = (idx - 3).coerceAtLeast(0)
         val to = (idx + 120).coerceAtMost(r.points.size - 1)
         for (i in from..to) {
-            val d = dist(ride.lat, ride.lon, r.points[i].latitude, r.points[i].longitude)
+            val d = dist(ride.lat, ride.lon, r.points[i].lat, r.points[i].lon)
             if (d < bestD) {
                 bestD = d
                 best = i
@@ -246,7 +248,7 @@ object Routing {
             var bi = search
             var bd = Double.MAX_VALUE
             for (i in search until pts.size) {
-                val d = Navigator.dist(lat, lon, pts[i].latitude, pts[i].longitude)
+                val d = Navigator.dist(lat, lon, pts[i].lat, pts[i].lon)
                 if (d < bd) {
                     bd = d
                     bi = i
@@ -291,11 +293,11 @@ object Routing {
         null
     }
 
-    private fun build(pts: List<GeoPoint>, mans: List<Maneuver>, lengthM: Double, timeS: Double, dest: Pin): Route? {
+    private fun build(pts: List<LL>, mans: List<Maneuver>, lengthM: Double, timeS: Double, dest: Pin): Route? {
         if (pts.size < 2) return null
         val cum = DoubleArray(pts.size)
         for (i in 1 until pts.size) {
-            cum[i] = cum[i - 1] + Navigator.dist(pts[i - 1].latitude, pts[i - 1].longitude, pts[i].latitude, pts[i].longitude)
+            cum[i] = cum[i - 1] + Navigator.dist(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon)
         }
         return Route(pts, cum, mans, if (lengthM > 0) lengthM else cum.last(), timeS, dest)
     }
@@ -316,9 +318,9 @@ object Routing {
     }
 
     /** Google's encoded polyline format, at the given precision (6 for Valhalla/OSRM polyline6). */
-    private fun decode(s: String, precision: Int): List<GeoPoint> {
+    private fun decode(s: String, precision: Int): List<LL> {
         val factor = 10.0.pow(precision)
-        val out = ArrayList<GeoPoint>()
+        val out = ArrayList<LL>()
         var index = 0
         var lat = 0L
         var lon = 0L
@@ -335,7 +337,7 @@ object Routing {
                 val delta = if ((result and 1L) != 0L) (result shr 1).inv() else (result shr 1)
                 if (axis == 0) lat += delta else lon += delta
             }
-            out.add(GeoPoint(lat / factor, lon / factor))
+            out.add(LL(lat / factor, lon / factor))
         }
         return out
     }
