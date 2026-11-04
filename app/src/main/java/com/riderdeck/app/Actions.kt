@@ -275,6 +275,7 @@ object Commands {
                 val m = Hub.lastMessage
                 if (m == null) reply("No new messages") else Speaker.say("${m.sender} said ${m.text}")
             }
+            t.contains("weather") || t.contains("rain") -> Speaker.say(Weather.spoken())
             t.contains("speed") -> reply("You're doing ${Hub.ride.value.speedKmh.roundToInt()} kilometres per hour")
             t.contains("range") || t.contains("how far") || t.contains("fuel left") ->
                 reply("About ${RiderApp.prefs.rangeKm(Hub.ride.value.fuelKm)} kilometres of fuel left")

@@ -5,6 +5,8 @@ plugins {
 }
 
 val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+// Google Maps key comes from the MAPS_API_KEY GitHub secret; without it the app uses its own map.
+val mapsKey = System.getenv("MAPS_API_KEY") ?: ""
 
 android {
     namespace = "com.riderdeck.app"
@@ -16,6 +18,8 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
+        manifestPlaceholders["MAPS_API_KEY"] = mapsKey
+        buildConfigField("boolean", "HAS_MAPS_KEY", mapsKey.isNotBlank().toString())
         // The map engine ships native code; keep only what phones like the iQOO 7 use.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -85,4 +89,5 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.maplibre.gl:android-sdk:11.8.2")
+    implementation("com.google.maps.android:maps-compose:6.1.0")
 }

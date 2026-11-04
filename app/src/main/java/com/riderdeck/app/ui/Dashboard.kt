@@ -26,7 +26,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LocalGasStation
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Flag
@@ -35,6 +39,7 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Navigation
+import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -42,6 +47,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Straight
+import androidx.compose.material.icons.rounded.Terrain
+import androidx.compose.material.icons.rounded.Thunderstorm
 import androidx.compose.material.icons.rounded.TurnLeft
 import androidx.compose.material.icons.rounded.TurnRight
 import androidx.compose.material.icons.rounded.TurnSharpLeft
@@ -50,7 +57,9 @@ import androidx.compose.material.icons.rounded.TurnSlightLeft
 import androidx.compose.material.icons.rounded.TurnSlightRight
 import androidx.compose.material.icons.rounded.UTurnLeft
 import androidx.compose.material.icons.rounded.UTurnRight
-import androidx.compose.material.icons.rounded.TwoWheeler
+import androidx.compose.material.icons.rounded.Umbrella
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -85,6 +94,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.riderdeck.app.BuildConfig
 import com.riderdeck.app.DeviceState
 import com.riderdeck.app.Hub
 import com.riderdeck.app.MainActivity
@@ -100,6 +110,9 @@ import com.riderdeck.app.PlaceSearch
 import com.riderdeck.app.RideState
 import com.riderdeck.app.RiderApp
 import com.riderdeck.app.RiderSettings
+import com.riderdeck.app.Speaker
+import com.riderdeck.app.Weather
+import com.riderdeck.app.compass
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -149,7 +162,7 @@ fun Dashboard(act: MainActivity) {
                     MapPanel(ride, nav, act, open, Modifier.weight(0.47f).fillMaxHeight())
                     Column(Modifier.weight(0.27f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         MusicPanel(media, listener, false, open, Modifier.weight(1.3f).fillMaxWidth())
-                        TyrePanel(open, false, Modifier.weight(1f).fillMaxWidth())
+                        InfoPanel(ride, dev, false, Modifier.weight(1f).fillMaxWidth())
                     }
                 }
             } else {
@@ -158,7 +171,7 @@ fun Dashboard(act: MainActivity) {
                     MapPanel(ride, nav, act, open, Modifier.weight(1f).fillMaxWidth())
                     Row(Modifier.fillMaxWidth().height(196.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         SpeedPanel(ride, s, true, open, act, Modifier.weight(1.3f).fillMaxHeight())
-                        TyrePanel(open, true, Modifier.weight(1f).fillMaxHeight())
+                        InfoPanel(ride, dev, true, Modifier.weight(1f).fillMaxHeight())
                     }
                     MusicPanel(media, listener, true, open, Modifier.fillMaxWidth().height(78.dp))
                     Rail(false, dev, open, Modifier.fillMaxWidth().height(68.dp))
@@ -393,7 +406,11 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
     val ru by Navigator.state.collectAsState()
     val routeCard = ru.loading || ru.route != null
     Box(modifier.panel()) {
-        RiderMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
+        if (BuildConfig.HAS_MAPS_KEY) {
+            GoogleRiderMap(ride, p.dark, pin, follow, ru, if (routeCard) 118 else 0, Modifier.fillMaxSize())
+        } else {
+            RiderMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
+        }
         Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(p.panel.copy(alpha = 0.9f), Color.Transparent))))
         Column(Modifier.align(Alignment.TopStart).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TurnCard(nav, ru, Modifier) {
@@ -772,42 +789,77 @@ fun CtrlButton(icon: ImageVector, desc: String, onClick: () -> Unit) {
     }
 }
 
-/* ---------------- tyres ---------------- */
+/* ---------------- weather & ride info ---------------- */
+
+fun weatherIcon(code: Int, day: Boolean): ImageVector = when (code) {
+    0, 1 -> if (day) Icons.Rounded.WbSunny else Icons.Rounded.NightsStay
+    2, 3, 45, 48 -> Icons.Rounded.Cloud
+    in 51..67, in 80..82 -> Icons.Rounded.WaterDrop
+    in 71..77 -> Icons.Rounded.AcUnit
+    in 95..99 -> Icons.Rounded.Thunderstorm
+    else -> Icons.Rounded.Cloud
+}
 
 @Composable
-fun TyrePanel(open: (String) -> Unit, compact: Boolean, modifier: Modifier) {
+fun InfoPanel(ride: RideState, dev: DeviceState, compact: Boolean, modifier: Modifier) {
     val p = LocalPal.current
+    val w by Weather.state.collectAsState()
     Column(
-        modifier.panel().clickable { open("tyres") }.padding(14.dp),
+        modifier.panel().clickable { Speaker.say(Weather.spoken()) }.padding(14.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Label("Tyres")
-            Spacer(Modifier.weight(1f))
-            Text("Not set up", fontSize = 11.5.sp, color = p.faint)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val tint = when (w.code) {
+                0, 1 -> if (w.isDay) p.warn else p.cyan
+                in 51..67, in 80..82, in 95..99 -> p.blue
+                else -> p.muted
+            }
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                Icon(weatherIcon(w.code, w.isDay), null, tint = tint, modifier = Modifier.size(26.dp))
+            }
+            Column {
+                Text(w.tempC?.let { "${it.roundToInt()}°" } ?: "--°", fontSize = 24.sp, fontWeight = FontWeight.Black, lineHeight = 26.sp)
+                Text(if (w.tempC == null) "Weather" else Weather.describe(w.code), fontSize = 12.sp, color = p.muted, maxLines = 1)
+            }
         }
+        val rain = w.rainInMin
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Rounded.Umbrella, null, tint = if (rain != null) p.warn else p.ok, modifier = Modifier.size(16.dp))
+            Text(
+                when {
+                    w.tempC == null -> "Checking rain…"
+                    rain == null -> "Dry for 2 hours"
+                    rain == 0 -> "Raining now"
+                    else -> "Rain in ~$rain min"
+                },
+                fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (rain != null) p.warn else p.ok, maxLines = 1,
+            )
+        }
+        val heading = if (ride.speedKmh > 4f) compass(ride.bearing) else "--"
         if (compact) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TyreValue("Front")
-                TyreValue("Rear")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                MiniStat(Icons.Rounded.Explore, heading, Modifier.weight(1f))
+                MiniStat(Icons.Rounded.Terrain, if (ride.hasFix) "${ride.altitudeM.roundToInt()}m" else "--", Modifier.weight(1f))
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TyreValue("Front", Modifier.weight(1f))
-                Icon(Icons.Rounded.TwoWheeler, null, tint = p.muted, modifier = Modifier.size(36.dp))
-                TyreValue("Rear", Modifier.weight(1f), end = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                MiniStat(Icons.Rounded.Explore, heading, Modifier.weight(1f))
+                MiniStat(Icons.Rounded.Terrain, if (ride.hasFix) "${ride.altitudeM.roundToInt()} m" else "--", Modifier.weight(1f))
+                MiniStat(Icons.Rounded.Air, "${w.windKmh.roundToInt()} km/h", Modifier.weight(1f))
             }
         }
-        Text("Tap to add tyre sensors", fontSize = 12.sp, color = p.blue)
     }
 }
 
 @Composable
-private fun TyreValue(label: String, modifier: Modifier = Modifier, end: Boolean = false) {
+private fun MiniStat(icon: ImageVector, value: String, modifier: Modifier) {
     val p = LocalPal.current
-    Column(modifier, horizontalAlignment = if (end) Alignment.End else Alignment.Start) {
-        Label(label)
-        Text("--", fontSize = 22.sp, fontWeight = FontWeight.Black, color = p.faint)
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(4.dp)).background(p.glass))
+    Row(
+        modifier.clip(RoundedCornerShape(12.dp)).background(p.glass).padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+    ) {
+        Icon(icon, null, tint = p.muted, modifier = Modifier.size(14.dp))
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }

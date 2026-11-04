@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             Hub.ride.collect { r ->
                 Navigator.onFix(r)
+                Weather.maybeRefresh(r)
                 val s = RiderApp.prefs.s.value
                 // over-speed beep, once per crossing
                 if (s.speedBeep && r.speedKmh > s.alertSpeed + 2 && !overSpeed) {

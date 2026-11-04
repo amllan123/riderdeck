@@ -133,7 +133,6 @@ fun Sheets(name: String, act: MainActivity, open: (String) -> Unit, close: () ->
                 "more" -> MoreSheet(act, open, close)
                 "ride" -> RideSheet(act)
                 "settings" -> SettingsSheet(act)
-                "tyres" -> TyreSheet()
                 "sos" -> SosSheet(act, close)
                 "perms" -> {
                     SheetHeader("Permissions", "Turn on what you want RiderDeck to do")
@@ -436,7 +435,6 @@ private fun MoreSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
     SheetHeader("More")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Tile(Icons.Rounded.Speed, p.blue, "This ride", "Distance, time, top speed, max lean") { open("ride") }
-        Tile(Icons.Rounded.TireRepair, p.ok, "Tyre sensors", "Set up tyre pressure monitoring") { open("tyres") }
         Tile(Icons.Rounded.Settings, p.muted, "Settings", "Home, emergency contacts, alerts, glove mode") { open("settings") }
         Tile(Icons.Rounded.Lock, p.cyan, "Permissions", "Location, music, calls, SMS, microphone") { open("perms") }
         Tile(Icons.Rounded.TwoWheeler, p.warn, "Set lean to zero", "Do this with the bike upright") {
@@ -448,19 +446,6 @@ private fun MoreSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
             close()
             act.startCrashCountdown()
         }
-    }
-}
-
-@Composable
-private fun TyreSheet() {
-    val p = LocalPal.current
-    SheetHeader("Tyre sensors", "Not connected yet")
-    Group {
-        Text(
-            "Your phone can't measure tyre pressure by itself. You need Bluetooth TPMS sensors that screw onto the tyre valves (external cap type, 2 sensors for a bike).\n\n" +
-                "Buy a kit, then send Claude the product link. The next RiderDeck update will read that exact sensor and show live pressure and temperature here, with a low-pressure alarm.",
-            fontSize = 14.sp, color = p.fg, lineHeight = 21.sp, modifier = Modifier.padding(14.dp),
-        )
     }
 }
 

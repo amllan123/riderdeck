@@ -16,5 +16,5 @@ Every push to `main` builds an APK with GitHub Actions and publishes it under **
 ## Notes
 
 - Keep RiderDeck open while riding. When you start a route, Google Maps opens; switch back to RiderDeck and the next turn shows on the dashboard.
-- Tyre pressure needs Bluetooth TPMS valve-cap sensors; support for a specific kit comes in a later build.
+- Google Maps inside the app needs a `MAPS_API_KEY` repository secret (Maps SDK for Android key restricted to `com.riderdeck.app`). Without it the app uses its own OpenStreetMap-based map.
 - `keystore/debug.keystore` is a throwaway signing key so builds update in place. Don't reuse it for anything else.

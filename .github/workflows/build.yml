@@ -24,6 +24,8 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build APKs
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
         run: gradle assembleFullDebug assembleLiteDebug --no-daemon --stacktrace
 
       - name: Name the APKs
