@@ -38,6 +38,19 @@ android {
         }
     }
 
+    // "full" has notification access (music info, Maps turns, call names, read-aloud).
+    // "lite" leaves it out so it installs even where Play Protect blocks that permission.
+    flavorDimensions += "edition"
+    productFlavors {
+        create("full") {
+            dimension = "edition"
+        }
+        create("lite") {
+            dimension = "edition"
+            versionNameSuffix = "-lite"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

@@ -14,10 +14,15 @@ class RiderApp : Application() {
     companion object {
         lateinit var prefs: Prefs
             private set
+        lateinit var ctx: Context
+            private set
+        /** Lite edition has no notification access (installs where Play Protect blocks it). */
+        val isLite: Boolean get() = BuildConfig.FLAVOR == "lite"
     }
 
     override fun onCreate() {
         super.onCreate()
+        ctx = applicationContext
         prefs = Prefs(this)
         org.osmdroid.config.Configuration.getInstance().apply {
             userAgentValue = packageName

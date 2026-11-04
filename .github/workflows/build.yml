@@ -23,11 +23,13 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Build APKs
+        run: gradle assembleFullDebug assembleLiteDebug --no-daemon --stacktrace
 
-      - name: Name the APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk "RiderDeck-${{ github.run_number }}.apk"
+      - name: Name the APKs
+        run: |
+          cp app/build/outputs/apk/full/debug/app-full-debug.apk "RiderDeck-${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/lite/debug/app-lite-debug.apk "RiderDeck-Lite-${{ github.run_number }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -39,6 +41,8 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: RiderDeck build ${{ github.run_number }}
-          body: Install the APK below on your phone. Each new build installs over the old one.
+          body: |
+            RiderDeck-N.apk is the full app. If Play Protect blocks it, install RiderDeck-Lite-N.apk (no song names, Maps turns or read-aloud).
+            Each new build installs over the old one.
           files: RiderDeck-*.apk
           make_latest: "true"

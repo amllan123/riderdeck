@@ -521,7 +521,7 @@ fun MusicPanel(m: MediaState, listenerOn: Boolean, compact: Boolean, open: (Stri
             Image(art.asImageBitmap(), null, Modifier.fillMaxSize().blur(36.dp).alpha(0.4f), contentScale = ContentScale.Crop)
         }
         when {
-            !listenerOn -> EmptyMusic("Music controls need notification access", "Allow", compact) { Perms.openListenerSettings(ctx) }
+            !listenerOn -> BasicMusic(compact) { if (!RiderApp.isLite) Perms.openListenerSettings(ctx) else Media.openYtMusic(ctx) }
             !m.connected || m.title.isBlank() -> EmptyMusic("Nothing playing", "Open YT Music", compact) { Media.openYtMusic(ctx) }
             compact -> Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp)) {
                 Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -562,6 +562,47 @@ fun MusicPanel(m: MediaState, listenerOn: Boolean, compact: Boolean, open: (Stri
                     PlayButton(m.playing, (52 * g).toInt())
                     CtrlButton(Icons.Rounded.SkipNext, "Next") { Media.next() }
                 }
+            }
+        }
+    }
+}
+
+/** Music controls without notification access: media keys only, no song name. */
+@Composable
+private fun BasicMusic(compact: Boolean, onHint: () -> Unit) {
+    val p = LocalPal.current
+    val g = LocalGlove.current
+    val hint = if (RiderApp.isLite) "Lite edition · buttons control YT Music" else "Tap to show song names"
+    if (compact) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(p.glass).clickable(onClick = onHint),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.MusicNote, null, tint = p.muted) }
+            Column(Modifier.weight(1f).padding(horizontal = 10.dp).clickable(onClick = onHint)) {
+                Text("Music", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text(hint, fontSize = 12.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            CtrlButton(Icons.Rounded.SkipPrevious, "Previous") { Media.prev() }
+            PlayButton(false, (48 * g).toInt())
+            CtrlButton(Icons.Rounded.SkipNext, "Next") { Media.next() }
+        }
+    } else {
+        Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            Label("Music")
+            Row(Modifier.clickable(onClick = onHint), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(58.dp).clip(RoundedCornerShape(14.dp)).background(p.glass), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.MusicNote, null, tint = p.muted)
+                }
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text("Play / pause / skip", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text(hint, fontSize = 12.sp, color = p.muted, maxLines = 2)
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                CtrlButton(Icons.Rounded.SkipPrevious, "Previous") { Media.prev() }
+                PlayButton(false, (52 * g).toInt())
+                CtrlButton(Icons.Rounded.SkipNext, "Next") { Media.next() }
             }
         }
     }

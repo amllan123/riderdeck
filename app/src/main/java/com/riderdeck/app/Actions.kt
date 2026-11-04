@@ -8,12 +8,14 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.telecom.TelecomManager
 import android.telephony.SmsManager
+import android.view.KeyEvent
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import java.util.Locale
@@ -71,11 +73,22 @@ object Perms {
 
 object Media {
     private fun t() = RiderNotificationListener.instance?.transport()
-    fun play() { t()?.play() }
-    fun pause() { t()?.pause() }
-    fun toggle() = if (Hub.media.value.playing) pause() else play()
-    fun next() { t()?.skipToNext() }
-    fun prev() { t()?.skipToPrevious() }
+
+    /** Without notification access we can still press the media keys, like a Bluetooth headset does. */
+    private fun key(code: Int) {
+        val am = RiderApp.ctx.getSystemService(AudioManager::class.java) ?: return
+        am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+        am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+    }
+
+    fun play() = t()?.play() ?: key(KeyEvent.KEYCODE_MEDIA_PLAY)
+    fun pause() = t()?.pause() ?: key(KeyEvent.KEYCODE_MEDIA_PAUSE)
+    fun toggle() {
+        if (t() == null) return key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+        if (Hub.media.value.playing) pause() else play()
+    }
+    fun next() = t()?.skipToNext() ?: key(KeyEvent.KEYCODE_MEDIA_NEXT)
+    fun prev() = t()?.skipToPrevious() ?: key(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
     fun skipTo(id: Long) { t()?.skipToQueueItem(id) }
 
     fun openYtMusic(ctx: Context) {

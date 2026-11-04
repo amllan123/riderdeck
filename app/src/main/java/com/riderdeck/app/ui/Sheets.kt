@@ -186,7 +186,8 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
         }
     }
     Text(
-        "After Maps starts, come back to RiderDeck. The next turn shows on your dashboard while Maps runs in the background.",
+        if (RiderApp.isLite) "Lite edition: Maps guides you with its own screen and voice. Turn-by-turn on the RiderDeck dashboard needs the full app."
+        else "After Maps starts, come back to RiderDeck. The next turn shows on your dashboard while Maps runs in the background.",
         fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp),
     )
 }
@@ -220,8 +221,21 @@ private fun MusicSheet(act: MainActivity) {
     val listener by Hub.listenerConnected.collectAsState()
     SheetHeader("Music", if (m.connected) "Playing in ${m.appName.ifBlank { "your music app" }}" else "Control YouTube Music without leaving the dashboard")
     if (!listener) {
-        Tile(Icons.Rounded.Notifications, p.warn, "Allow notification access", "Needed to see and control what's playing") {
-            Perms.openListenerSettings(act)
+        if (RiderApp.isLite) {
+            Text(
+                "This is the Lite edition. The play, pause and skip buttons control YouTube Music, but song names, artwork and the queue need the full RiderDeck app.",
+                fontSize = 14.sp, color = p.muted, lineHeight = 20.sp,
+            )
+            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                CtrlButton(Icons.Rounded.SkipPrevious, "Previous") { Media.prev() }
+                PlayButton(false, 64)
+                CtrlButton(Icons.Rounded.SkipNext, "Next") { Media.next() }
+            }
+            PillButton("Open YouTube Music", Modifier.fillMaxWidth(), primary = false, icon = Icons.Rounded.MusicNote) { Media.openYtMusic(act) }
+        } else {
+            Tile(Icons.Rounded.Notifications, p.warn, "Allow notification access", "Needed to see and control what's playing") {
+                Perms.openListenerSettings(act)
+            }
         }
         return
     }
@@ -533,14 +547,15 @@ fun PermissionList(act: MainActivity) {
     val items = listOf(
         PermItem(Icons.Rounded.Place, "Location", "Speed, trip, map and your SOS location",
             listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)),
-        PermItem(Icons.Rounded.Notifications, "Notification access", "Music controls, Google Maps turns, calls and reading messages", emptyList(), special = true),
+        PermItem(Icons.Rounded.Notifications, "Notification access", "Music controls, Google Maps turns, calls and reading messages", emptyList(), special = true)
+            .takeUnless { RiderApp.isLite },
         PermItem(Icons.Rounded.Phone, "Phone", "Answer and decline calls with big buttons",
             listOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS)),
         PermItem(Icons.Rounded.Sms, "SMS", "Text your location to emergency contacts", listOf(Manifest.permission.SEND_SMS)),
         PermItem(Icons.Rounded.Mic, "Microphone", "Voice commands", listOf(Manifest.permission.RECORD_AUDIO)),
     )
     Group {
-        items.forEach { item ->
+        items.filterNotNull().forEach { item ->
             val granted = remember(tick) {
                 if (item.special) Perms.listener(ctx) else item.perms.all { Perms.has(ctx, it) }
             }
