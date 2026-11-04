@@ -76,6 +76,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -95,6 +97,9 @@ import com.riderdeck.app.MainActivity
 import com.riderdeck.app.Media
 import com.riderdeck.app.Nav
 import com.riderdeck.app.Perms
+import com.riderdeck.app.Pin
+import com.riderdeck.app.Place
+import com.riderdeck.app.PlaceSearch
 import com.riderdeck.app.RiderApp
 import com.riderdeck.app.RiderNotificationListener
 import com.riderdeck.app.Speaker
@@ -154,42 +159,124 @@ private fun riderFieldColors() = OutlinedTextFieldDefaults.colors(
 @Composable
 private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Unit) {
     val p = LocalPal.current
+    val ctx = LocalContext.current
     val ride by Hub.ride.collectAsState()
     val s by RiderApp.prefs.s.collectAsState()
     var q by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<Place>>(emptyList()) }
+    var busy by remember { mutableStateOf(false) }
+    var searched by remember { mutableStateOf("") }
     val locked = s.rideLock && ride.speedKmh > 10f
+    val focus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        if (!locked) try { focus.requestFocus() } catch (_: Exception) { }
+    }
+    LaunchedEffect(q) {
+        val text = q.trim()
+        if (text.length < 3) {
+            results = emptyList(); searched = ""; return@LaunchedEffect
+        }
+        delay(450)
+        busy = true
+        results = PlaceSearch.find(ctx, text)
+        searched = text
+        busy = false
+    }
     fun go(place: String) {
         if (place.isBlank()) return
         close()
         act.navigate(place)
     }
-    SheetHeader("Where to?", if (locked) "Typing is locked while you're moving. Say it or pick a saved place" else "Google Maps guides you in two-wheeler mode")
+    fun show(pl: Place) {
+        Hub.pin.value = Pin(pl.lat, pl.lon, pl.title)
+        close()
+    }
+
+    SheetHeader("Search", if (locked) "Typing is locked while you're moving. Say it or pick a saved place" else "Find any place, show it on the map or start a route")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = q, onValueChange = { q = it }, enabled = !locked, singleLine = true,
-            placeholder = { Text(if (locked) "Locked while moving" else "Search a place or address") },
+            placeholder = { Text(if (locked) "Locked while moving" else "Place, shop, address, landmark") },
             leadingIcon = { Icon(if (locked) Icons.Rounded.Lock else Icons.Rounded.Search, null) },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { go(q) }),
+            trailingIcon = {
+                if (q.isNotEmpty()) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Close, "Clear")
+                    }
+                }
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = {
+                val first = results.firstOrNull()
+                if (first != null) show(first) else if (q.isNotBlank()) Nav.searchNearby(act, q.trim())
+            }),
             shape = RoundedCornerShape(18.dp), colors = riderFieldColors(),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).focusRequester(focus),
         )
         RoundFab(Icons.Rounded.Mic, "Say a place", true) { close(); act.startVoice() }
     }
-    SectionTitle("Saved")
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Tile(Icons.Rounded.Home, p.blue, "Home", s.home.ifBlank { "Tap to set your home address" }) {
-            if (s.home.isBlank()) open("settings") else go(s.home)
+
+    when {
+        busy -> Text("Searching…", fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp, start = 4.dp))
+        results.isNotEmpty() -> {
+            SectionTitle("Results")
+            Group {
+                results.forEach { pl -> ResultRow(pl, onShow = { show(pl) }, onGo = { go("${pl.lat},${pl.lon}") }) }
+            }
         }
-        Tile(Icons.Rounded.Work, p.cyan, "Office", s.office.ifBlank { "Tap to set your office address" }) {
-            if (s.office.isBlank()) open("settings") else go(s.office)
+        searched.isNotEmpty() -> {
+            Text("No matches for “$searched”.", fontSize = 14.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp, start = 4.dp))
+            PillButton("Search “$searched” in Google Maps", Modifier.fillMaxWidth().padding(top = 8.dp), primary = false, icon = Icons.Rounded.Search) {
+                close(); Nav.searchNearby(act, searched)
+            }
         }
     }
-    Text(
-        if (RiderApp.isLite) "Lite edition: Maps guides you with its own screen and voice. Turn-by-turn on the RiderDeck dashboard needs the full app."
-        else "After Maps starts, come back to RiderDeck. The next turn shows on your dashboard while Maps runs in the background.",
-        fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp),
-    )
+
+    if (q.isBlank()) {
+        SectionTitle("Saved")
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Tile(Icons.Rounded.Home, p.blue, "Home", s.home.ifBlank { "Tap to set your home address" }) {
+                if (s.home.isBlank()) open("settings") else go(s.home)
+            }
+            Tile(Icons.Rounded.Work, p.cyan, "Office", s.office.ifBlank { "Tap to set your office address" }) {
+                if (s.office.isBlank()) open("settings") else go(s.office)
+            }
+            Tile(Icons.Rounded.LocalGasStation, p.warn, "Nearby", "Petrol, puncture shop, air, mechanic, hospital") { open("near") }
+        }
+        Text(
+            if (RiderApp.isLite) "“Go” starts Google Maps in two-wheeler mode. Turn-by-turn on the RiderDeck dashboard needs the full app."
+            else "“Go” starts Google Maps in two-wheeler mode. Come back to RiderDeck and the next turn shows on your dashboard.",
+            fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp),
+        )
+    }
+}
+
+@Composable
+private fun ResultRow(pl: Place, onShow: () -> Unit, onGo: () -> Unit) {
+    val p = LocalPal.current
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onShow).padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Icons.Rounded.Place, null, tint = p.bad)
+        Column(Modifier.weight(1f)) {
+            Text(pl.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val dist = pl.distanceKm?.let { formatKm(it) + " · " } ?: ""
+            Text(dist + pl.sub, fontSize = 12.sp, color = p.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Text(
+            "Map", color = p.fg, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(p.glass).clickable(onClick = onShow)
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+        )
+        Text(
+            "Go", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(p.blue, p.cyan)))
+                .clickable(onClick = onGo).padding(horizontal = 14.dp, vertical = 9.dp),
+        )
+    }
 }
 
 @Composable

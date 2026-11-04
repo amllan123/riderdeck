@@ -95,6 +95,10 @@ object Hub {
     val crashCountdown = MutableStateFlow<Int?>(null)
     val voice = MutableStateFlow<VoiceState?>(null)
     val listenerConnected = MutableStateFlow(false)
+    /** A searched place shown on the map. */
+    val pin = MutableStateFlow<Pin?>(null)
+    /** True while the map keeps itself centred on you. Moving the map turns it off. */
+    val follow = MutableStateFlow(true)
     val toast = MutableStateFlow<Pair<Long, String>?>(null)
 
     fun toast(msg: String) {

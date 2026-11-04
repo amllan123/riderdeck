@@ -1,6 +1,8 @@
 package com.riderdeck.app.ui
 
+import android.graphics.drawable.GradientDrawable
 import android.os.SystemClock
+import android.view.MotionEvent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -28,7 +30,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.LocalGasStation
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Pause
@@ -62,6 +66,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -80,6 +85,8 @@ import com.riderdeck.app.MediaState
 import com.riderdeck.app.Nav
 import com.riderdeck.app.NavState
 import com.riderdeck.app.Perms
+import com.riderdeck.app.Pin
+import com.riderdeck.app.PlaceSearch
 import com.riderdeck.app.RideState
 import com.riderdeck.app.RiderApp
 import com.riderdeck.app.RiderSettings
@@ -89,6 +96,7 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -376,20 +384,22 @@ fun SpeedRing(kmh: Float, over: Boolean, modifier: Modifier) {
 @Composable
 fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -> Unit, modifier: Modifier) {
     val p = LocalPal.current
+    val pin by Hub.pin.collectAsState()
+    val follow by Hub.follow.collectAsState()
     Box(modifier.panel()) {
-        OsmMap(ride, p.dark, Modifier.fillMaxSize())
-        Box(
-            Modifier.align(Alignment.Center).size(26.dp).clip(CircleShape).background(Color.White).padding(5.dp)
-                .clip(CircleShape).background(p.blue)
-        )
+        OsmMap(ride, p.dark, pin, follow, Modifier.fillMaxSize())
         Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(p.panel.copy(alpha = 0.9f), Color.Transparent))))
-        TurnCard(nav, Modifier.align(Alignment.TopStart).padding(10.dp)) { if (nav.active) Nav.openMaps(act) else open("goto") }
+        Column(Modifier.align(Alignment.TopStart).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TurnCard(nav, Modifier) { if (nav.active) Nav.openMaps(act) else open("goto") }
+            pin?.let { PinChip(it, act) }
+        }
         Column(
             Modifier.align(Alignment.BottomEnd).padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.End,
         ) {
-            RoundFab(Icons.Rounded.Search, "Nearby", false) { open("near") }
+            if (!follow) RoundFab(Icons.Rounded.MyLocation, "Back to my location", false) { Hub.follow.value = true }
+            RoundFab(Icons.Rounded.Search, "Search places", false) { open("goto") }
             RoundFab(Icons.Rounded.Mic, "Voice command", true) { act.startVoice() }
         }
         if (!ride.hasFix) {
@@ -410,6 +420,35 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
         }
     }
 }
+
+@Composable
+private fun PinChip(pin: Pin, act: MainActivity) {
+    val p = LocalPal.current
+    val km = PlaceSearch.distanceFromMe(pin.lat, pin.lon)
+    Row(
+        Modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(18.dp)).background(p.sheet.copy(alpha = 0.94f))
+            .padding(start = 12.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Rounded.Place, null, tint = p.bad, modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f, fill = false)) {
+            Text(pin.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (km != null) Text(formatKm(km), fontSize = 12.sp, color = p.muted)
+        }
+        Text(
+            "Go", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(p.blue, p.cyan)))
+                .clickable { act.navigate("${pin.lat},${pin.lon}") }.padding(horizontal = 16.dp, vertical = 9.dp),
+        )
+        Box(
+            Modifier.size(38.dp).clip(CircleShape).clickable { Hub.pin.value = null; Hub.follow.value = true },
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Rounded.Close, "Clear", tint = p.muted, modifier = Modifier.size(20.dp)) }
+    }
+}
+
+fun formatKm(km: Float): String = if (km < 1f) "${(km * 1000).roundToInt()} m away" else if (km < 100f) "%.1f km away".format(km) else "${km.roundToInt()} km away"
 
 @Composable
 fun RoundFab(icon: ImageVector, desc: String, primary: Boolean, onClick: () -> Unit) {
@@ -458,8 +497,9 @@ fun TurnCard(nav: NavState, modifier: Modifier, onClick: () -> Unit) {
 }
 
 @Composable
-fun OsmMap(ride: RideState, dark: Boolean, modifier: Modifier) {
+fun OsmMap(ride: RideState, dark: Boolean, pin: Pin?, follow: Boolean, modifier: Modifier) {
     val ctx = LocalContext.current
+    val blue = LocalPal.current.blue
     val map = remember {
         MapView(ctx).apply {
             setTileSource(TileSourceFactory.MAPNIK)
@@ -468,6 +508,23 @@ fun OsmMap(ride: RideState, dark: Boolean, modifier: Modifier) {
             isTilesScaledToDpi = true
             minZoomLevel = 4.0
             controller.setZoom(17.0)
+            // Dragging or pinching the map stops it from following you.
+            setOnTouchListener { _, e ->
+                if (e.actionMasked == MotionEvent.ACTION_MOVE) Hub.follow.value = false
+                false
+            }
+        }
+    }
+    val me = remember {
+        Marker(map).apply {
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            setOnMarkerClickListener { _, _ -> true }
+        }
+    }
+    val target = remember {
+        Marker(map).apply {
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            setOnMarkerClickListener { _, _ -> true }
         }
     }
     androidx.compose.runtime.DisposableEffect(Unit) {
@@ -481,11 +538,37 @@ fun OsmMap(ride: RideState, dark: Boolean, modifier: Modifier) {
         map.overlayManager.tilesOverlay.setColorFilter(if (dark) darkMapFilter() else null)
         map.invalidate()
     }
-    LaunchedEffect(ride.lat, ride.lon) {
-        if (ride.hasFix) {
-            map.controller.animateTo(GeoPoint(ride.lat, ride.lon))
-            if (ride.speedKmh > 6f) map.mapOrientation = -ride.bearing
+    LaunchedEffect(blue) {
+        me.icon = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(blue.toArgb())
+            setStroke(8, android.graphics.Color.WHITE)
+            setSize(52, 52)
         }
+    }
+    LaunchedEffect(ride.lat, ride.lon, follow) {
+        if (!ride.hasFix) return@LaunchedEffect
+        me.position = GeoPoint(ride.lat, ride.lon)
+        if (!map.overlays.contains(me)) map.overlays.add(me)
+        if (follow) {
+            map.controller.animateTo(me.position)
+            map.mapOrientation = if (ride.speedKmh > 6f) -ride.bearing else map.mapOrientation
+        }
+        map.invalidate()
+    }
+    LaunchedEffect(pin) {
+        if (pin == null) {
+            map.overlays.remove(target)
+        } else {
+            target.position = GeoPoint(pin.lat, pin.lon)
+            target.title = pin.title
+            if (!map.overlays.contains(target)) map.overlays.add(target)
+            Hub.follow.value = false
+            map.mapOrientation = 0f
+            map.controller.setZoom(16.0)
+            map.controller.animateTo(target.position)
+        }
+        map.invalidate()
     }
     AndroidView(factory = { map }, modifier = modifier)
 }
