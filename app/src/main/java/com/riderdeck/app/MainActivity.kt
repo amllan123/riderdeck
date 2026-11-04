@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { Hub.device.collect { applyHeatGuard(it.tempC) } }
         lifecycleScope.launch {
             Hub.ride.collect { r ->
+                Navigator.onFix(r)
                 val s = RiderApp.prefs.s.value
                 // over-speed beep, once per crossing
                 if (s.speedBeep && r.speedKmh > s.alertSpeed + 2 && !overSpeed) {
@@ -135,9 +136,9 @@ class MainActivity : ComponentActivity() {
         startCallMonitor()
     }
 
+    /** Voice "navigate to …": plan the route in RiderDeck and start guiding straight away. */
     fun navigate(place: String) {
-        Nav.navigateTo(this, place)
-        Hub.toast("Google Maps is guiding you. Come back here and the turns show on the dashboard")
+        Navigator.previewQuery(this, place, autoStart = true)
     }
 
     /* ---------------- crash & SOS ---------------- */

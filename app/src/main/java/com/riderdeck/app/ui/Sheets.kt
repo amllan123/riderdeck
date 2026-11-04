@@ -96,6 +96,7 @@ import com.riderdeck.app.Hub
 import com.riderdeck.app.MainActivity
 import com.riderdeck.app.Media
 import com.riderdeck.app.Nav
+import com.riderdeck.app.Navigator
 import com.riderdeck.app.Perms
 import com.riderdeck.app.Pin
 import com.riderdeck.app.Place
@@ -186,7 +187,7 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
     fun go(place: String) {
         if (place.isBlank()) return
         close()
-        act.navigate(place)
+        Navigator.previewQuery(ctx, place, autoStart = false)
     }
     fun show(pl: Place) {
         Hub.pin.value = Pin(pl.lat, pl.lon, pl.title)
@@ -222,7 +223,7 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
         results.isNotEmpty() -> {
             SectionTitle("Results")
             Group {
-                results.forEach { pl -> ResultRow(pl, onShow = { show(pl) }, onGo = { go("${pl.lat},${pl.lon}") }) }
+                results.forEach { pl -> ResultRow(pl, onShow = { show(pl) }, onGo = { close(); Navigator.preview(Pin(pl.lat, pl.lon, pl.title)) }) }
             }
         }
         searched.isNotEmpty() -> {
@@ -245,8 +246,7 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
             Tile(Icons.Rounded.LocalGasStation, p.warn, "Nearby", "Petrol, puncture shop, air, mechanic, hospital") { open("near") }
         }
         Text(
-            if (RiderApp.isLite) "“Go” starts Google Maps in two-wheeler mode. Turn-by-turn on the RiderDeck dashboard needs the full app."
-            else "“Go” starts Google Maps in two-wheeler mode. Come back to RiderDeck and the next turn shows on your dashboard.",
+            "“Go” plans a two-wheeler route on the RiderDeck map with voice turn-by-turn. You can still hand it to Google Maps from the route card.",
             fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp),
         )
     }

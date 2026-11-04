@@ -1,5 +1,6 @@
 package com.riderdeck.app.ui
 
+import android.graphics.Paint
 import android.graphics.drawable.GradientDrawable
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.LocalGasStation
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.MusicNote
@@ -41,6 +44,15 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Straight
+import androidx.compose.material.icons.rounded.TurnLeft
+import androidx.compose.material.icons.rounded.TurnRight
+import androidx.compose.material.icons.rounded.TurnSharpLeft
+import androidx.compose.material.icons.rounded.TurnSharpRight
+import androidx.compose.material.icons.rounded.TurnSlightLeft
+import androidx.compose.material.icons.rounded.TurnSlightRight
+import androidx.compose.material.icons.rounded.UTurnLeft
+import androidx.compose.material.icons.rounded.UTurnRight
 import androidx.compose.material.icons.rounded.TwoWheeler
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -84,6 +96,8 @@ import com.riderdeck.app.Media
 import com.riderdeck.app.MediaState
 import com.riderdeck.app.Nav
 import com.riderdeck.app.NavState
+import com.riderdeck.app.Navigator
+import com.riderdeck.app.RouteUi
 import com.riderdeck.app.Perms
 import com.riderdeck.app.Pin
 import com.riderdeck.app.PlaceSearch
@@ -93,10 +107,12 @@ import com.riderdeck.app.RiderSettings
 import com.riderdeck.app.darkMapFilter
 import kotlinx.coroutines.delay
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -386,23 +402,33 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
     val p = LocalPal.current
     val pin by Hub.pin.collectAsState()
     val follow by Hub.follow.collectAsState()
+    val ru by Navigator.state.collectAsState()
+    val routeCard = ru.loading || ru.route != null
     Box(modifier.panel()) {
-        OsmMap(ride, p.dark, pin, follow, Modifier.fillMaxSize())
+        OsmMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
         Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(p.panel.copy(alpha = 0.9f), Color.Transparent))))
         Column(Modifier.align(Alignment.TopStart).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TurnCard(nav, Modifier) { if (nav.active) Nav.openMaps(act) else open("goto") }
-            pin?.let { PinChip(it, act) }
+            TurnCard(nav, ru, Modifier) {
+                when {
+                    ru.navigating -> { Hub.follow.value = true }
+                    nav.active -> { Nav.openMaps(act) }
+                    else -> { open("goto") }
+                }
+            }
+            if (pin != null && ru.route == null && !ru.loading) PinChip(pin!!)
         }
         Column(
-            Modifier.align(Alignment.BottomEnd).padding(10.dp),
+            Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = if (routeCard) 118.dp else 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.End,
         ) {
             if (!follow) RoundFab(Icons.Rounded.MyLocation, "Back to my location", false) { Hub.follow.value = true }
-            RoundFab(Icons.Rounded.Search, "Search places", false) { open("goto") }
+            if (!ru.navigating) RoundFab(Icons.Rounded.Search, "Search places", false) { open("goto") }
             RoundFab(Icons.Rounded.Mic, "Voice command", true) { act.startVoice() }
         }
-        if (!ride.hasFix) {
+        if (routeCard) {
+            RouteCard(ru, act, Modifier.align(Alignment.BottomCenter).padding(10.dp).fillMaxWidth())
+        } else if (!ride.hasFix) {
             Row(
                 Modifier.align(Alignment.BottomStart).padding(10.dp).clip(RoundedCornerShape(99.dp))
                     .background(p.sheet.copy(alpha = 0.9f)).padding(horizontal = 12.dp, vertical = 7.dp),
@@ -421,8 +447,59 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
     }
 }
 
+/** Route summary under the map: planning → preview (Start / Google Maps) → navigating (End). */
 @Composable
-private fun PinChip(pin: Pin, act: MainActivity) {
+private fun RouteCard(ru: RouteUi, act: MainActivity, modifier: Modifier) {
+    val p = LocalPal.current
+    val r = ru.route
+    Column(
+        modifier.clip(RoundedCornerShape(22.dp)).background(p.sheet.copy(alpha = 0.96f))
+            .border(1.dp, p.stroke, RoundedCornerShape(22.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (r == null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Dot(p.blue)
+                Text("Finding a two-wheeler route…", fontSize = 14.sp, color = p.fg)
+                Spacer(Modifier.weight(1f))
+                Text("Cancel", color = p.muted, fontSize = 13.sp, modifier = Modifier.clickable { Navigator.stop() }.padding(6.dp))
+            }
+            return@Column
+        }
+        val meters = if (ru.navigating) ru.remainingM else r.lengthM
+        val secs = if (ru.navigating) ru.remainingS else r.timeS
+        val arrive = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(System.currentTimeMillis() + (secs * 1000).toLong()))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "${(secs / 60).roundToInt().coerceAtLeast(1)} min · ${"%.1f".format(meters / 1000)} km",
+                    fontSize = 18.sp, fontWeight = FontWeight.Black, color = p.ok, maxLines = 1,
+                )
+                Text("Arrive $arrive · ${r.dest.title}", fontSize = 12.5.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (ru.navigating) {
+                Text(
+                    "End", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(p.bad).clickable { Navigator.stop() }
+                        .padding(horizontal = 18.dp, vertical = 11.dp),
+                )
+            } else {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable { Navigator.stop() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Close, "Cancel route", tint = p.muted)
+                }
+            }
+        }
+        if (!ru.navigating) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PillButton("Start", Modifier.weight(1f), icon = Icons.Rounded.Navigation) { Navigator.start() }
+                PillButton("Google Maps", Modifier.weight(1f), primary = false) { Nav.navigateTo(act, "${r.dest.lat},${r.dest.lon}") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PinChip(pin: Pin) {
     val p = LocalPal.current
     val km = PlaceSearch.distanceFromMe(pin.lat, pin.lon)
     Row(
@@ -437,12 +514,12 @@ private fun PinChip(pin: Pin, act: MainActivity) {
             if (km != null) Text(formatKm(km), fontSize = 12.sp, color = p.muted)
         }
         Text(
-            "Go", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+            "Route", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
             modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(p.blue, p.cyan)))
-                .clickable { act.navigate("${pin.lat},${pin.lon}") }.padding(horizontal = 16.dp, vertical = 9.dp),
+                .clickable { Navigator.preview(pin) }.padding(horizontal = 16.dp, vertical = 9.dp),
         )
         Box(
-            Modifier.size(38.dp).clip(CircleShape).clickable { Hub.pin.value = null; Hub.follow.value = true },
+            Modifier.size(38.dp).clip(CircleShape).clickable { Navigator.stop() },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Rounded.Close, "Clear", tint = p.muted, modifier = Modifier.size(20.dp)) }
     }
@@ -463,9 +540,30 @@ fun RoundFab(icon: ImageVector, desc: String, primary: Boolean, onClick: () -> U
     ) { Icon(icon, desc, tint = if (primary) Color.White else p.fg) }
 }
 
+fun maneuverIcon(type: Int): ImageVector = when (type) {
+    9, 18, 20, 23 -> Icons.Rounded.TurnSlightRight
+    10 -> Icons.Rounded.TurnRight
+    11 -> Icons.Rounded.TurnSharpRight
+    12 -> Icons.Rounded.UTurnRight
+    13 -> Icons.Rounded.UTurnLeft
+    14 -> Icons.Rounded.TurnSharpLeft
+    15 -> Icons.Rounded.TurnLeft
+    16, 19, 21, 24 -> Icons.Rounded.TurnSlightLeft
+    4, 5, 6 -> Icons.Rounded.Flag
+    26, 27 -> Icons.Rounded.Loop
+    else -> Icons.Rounded.Straight
+}
+
+fun shortDistance(m: Double): String = when {
+    m >= 1000 -> "%.1f km".format(m / 1000)
+    m >= 100 -> "${(m / 10).roundToInt() * 10} m"
+    else -> "${(m / 5).roundToInt() * 5} m"
+}
+
 @Composable
-fun TurnCard(nav: NavState, modifier: Modifier, onClick: () -> Unit) {
+fun TurnCard(nav: NavState, ru: RouteUi, modifier: Modifier, onClick: () -> Unit) {
     val p = LocalPal.current
+    val inApp = ru.navigating && ru.next != null
     Row(
         modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(22.dp)).background(p.sheet.copy(alpha = 0.94f))
             .border(1.dp, p.stroke, RoundedCornerShape(22.dp)).clickable(onClick = onClick)
@@ -474,30 +572,37 @@ fun TurnCard(nav: NavState, modifier: Modifier, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
-            Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(p.blue, p.cyan))),
+            Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(p.blue, p.cyan))),
             contentAlignment = Alignment.Center,
         ) {
             val icon = nav.icon
-            if (nav.active && icon != null) {
-                Image(icon.asImageBitmap(), null, Modifier.size(36.dp), colorFilter = ColorFilter.tint(Color.White))
-            } else {
-                Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(28.dp))
+            when {
+                inApp -> Icon(maneuverIcon(ru.next!!.type), null, tint = Color.White, modifier = Modifier.size(36.dp))
+                nav.active && icon != null -> Image(icon.asImageBitmap(), null, Modifier.size(36.dp), colorFilter = ColorFilter.tint(Color.White))
+                else -> Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(28.dp))
             }
         }
         Column {
-            if (nav.active) {
-                Text(nav.distance, fontSize = 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                Text(nav.instruction, fontSize = 13.5.sp, color = p.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            } else {
-                Text("Where to?", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("Tap to start a two-wheeler route", fontSize = 13.sp, color = p.muted)
+            when {
+                inApp -> {
+                    Text(shortDistance(ru.toNextM), fontSize = 24.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                    Text(ru.next!!.instruction, fontSize = 13.5.sp, color = p.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                nav.active -> {
+                    Text(nav.distance, fontSize = 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                    Text(nav.instruction, fontSize = 13.5.sp, color = p.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                else -> {
+                    Text("Where to?", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Search a place to plan a route", fontSize = 13.sp, color = p.muted)
+                }
             }
         }
     }
 }
 
 @Composable
-fun OsmMap(ride: RideState, dark: Boolean, pin: Pin?, follow: Boolean, modifier: Modifier) {
+fun OsmMap(ride: RideState, dark: Boolean, pin: Pin?, follow: Boolean, ru: RouteUi, modifier: Modifier) {
     val ctx = LocalContext.current
     val blue = LocalPal.current.blue
     val map = remember {
@@ -525,6 +630,42 @@ fun OsmMap(ride: RideState, dark: Boolean, pin: Pin?, follow: Boolean, modifier:
         Marker(map).apply {
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             setOnMarkerClickListener { _, _ -> true }
+        }
+    }
+    val line = remember {
+        Polyline(map).apply {
+            outlinePaint.strokeWidth = 18f
+            outlinePaint.strokeCap = Paint.Cap.ROUND
+            outlinePaint.strokeJoin = Paint.Join.ROUND
+            outlinePaint.isAntiAlias = true
+            setOnClickListener { _, _, _ -> true }
+        }
+    }
+    val route = ru.route
+    LaunchedEffect(route, blue) {
+        line.outlinePaint.color = blue.toArgb()
+        if (route == null) {
+            map.overlays.remove(line)
+        } else {
+            line.setPoints(route.points)
+            if (!map.overlays.contains(line)) map.overlays.add(0, line)
+            if (!ru.navigating) {
+                Hub.follow.value = false
+                map.mapOrientation = 0f
+                map.post {
+                    try {
+                        map.zoomToBoundingBox(BoundingBox.fromGeoPoints(route.points).increaseByScale(1.25f), true)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        map.invalidate()
+    }
+    LaunchedEffect(ru.navigating) {
+        if (ru.navigating) {
+            Hub.follow.value = true
+            map.controller.setZoom(17.5)
         }
     }
     androidx.compose.runtime.DisposableEffect(Unit) {
@@ -563,10 +704,12 @@ fun OsmMap(ride: RideState, dark: Boolean, pin: Pin?, follow: Boolean, modifier:
             target.position = GeoPoint(pin.lat, pin.lon)
             target.title = pin.title
             if (!map.overlays.contains(target)) map.overlays.add(target)
-            Hub.follow.value = false
-            map.mapOrientation = 0f
-            map.controller.setZoom(16.0)
-            map.controller.animateTo(target.position)
+            if (ru.route == null && !ru.loading) {
+                Hub.follow.value = false
+                map.mapOrientation = 0f
+                map.controller.setZoom(16.0)
+                map.controller.animateTo(target.position)
+            }
         }
         map.invalidate()
     }
