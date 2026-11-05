@@ -169,7 +169,10 @@ fun Dashboard(act: MainActivity) {
                 }
             }
             Overlays(act)
-            sheet?.let { name -> Sheets(name, act, open) { sheet = null } }
+            sheet?.let { name ->
+                if (name == "goto") SearchScreen(act, open) { sheet = null }
+                else Sheets(name, act, open) { sheet = null }
+            }
         }
         AnimatedVisibility(visible = intro, exit = fadeOut(tween(380)) + scaleOut(targetScale = 1.08f, animationSpec = tween(380))) {
             Intro {

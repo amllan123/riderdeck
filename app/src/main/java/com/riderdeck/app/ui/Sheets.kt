@@ -41,6 +41,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.NotificationsActive
@@ -147,7 +150,6 @@ fun Sheets(name: String, act: MainActivity, open: (String) -> Unit, close: () ->
                 .padding(horizontal = 18.dp).padding(bottom = 28.dp).navigationBarsPadding()
         ) {
             when (name) {
-                "goto" -> GoToSheet(act, open, close)
                 "near" -> NearbySheet(act, close)
                 "music" -> MusicSheet(act)
                 "fuel" -> FuelSheet()
@@ -178,25 +180,36 @@ private fun riderFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLabelColor = LocalPal.current.muted,
 )
 
+/**
+ * Full-screen search (like Google Maps): search box pinned at the top, results scroll underneath, and the
+ * keyboard gets out of the way — it hides when you scroll, press search or pick a place. In landscape it only
+ * opens when you tap the box, because there it would cover most of the screen.
+ */
 @Composable
-private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Unit) {
+fun SearchScreen(act: MainActivity, open: (String) -> Unit, close: () -> Unit) {
     val p = LocalPal.current
     val ctx = LocalContext.current
-    val ride by Hub.ride.collectAsState()
+    val rideState = Hub.ride.collectAsState()
+    val fast by remember { derivedStateOf { rideState.value.speedKmh > 10f } }
     val s by RiderApp.prefs.s.collectAsState()
-    var q by remember { mutableStateOf("") }
+    val google by PlaceSearch.google.collectAsState()
+    val park by RiderApp.prefs.parking.collectAsState()
+    var q by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Place>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var searched by remember { mutableStateOf("") }
-    val locked = s.rideLock && ride.speedKmh > 10f
+    val locked = s.rideLock && fast
     val focus = remember { FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
 
-    val google by PlaceSearch.google.collectAsState()
-
-    LaunchedEffect(Unit) {
-        PlaceSearch.newSession()
-        if (!locked) try { focus.requestFocus() } catch (_: Exception) { }
+    fun hideKeyboard() {
+        keyboard?.hide()
+        focusManager.clearFocus()
     }
+    androidx.activity.compose.BackHandler(onBack = close)
+
     LaunchedEffect(q) {
         val text = q.trim()
         if (text.length < 2) {
@@ -208,12 +221,16 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
         searched = text
         busy = false
     }
+    LaunchedEffect(list.isScrollInProgress) {
+        if (list.isScrollInProgress) hideKeyboard()
+    }
     fun go(place: String) {
         if (place.isBlank()) return
         close()
         Navigator.previewQuery(ctx, place, autoStart = false)
     }
     fun show(pl: Place) {
+        hideKeyboard()
         close()
         Navigator.showPlace(ctx, pl)
     }
@@ -223,75 +240,108 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
         Hub.toast("Found it? Tap Share → RiderDeck to ride it here")
     }
 
-    SheetHeader("Search", if (locked) "Typing is locked while you're moving. Say it or pick a saved place" else "Find any place, show it on the map or start a route")
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = q, onValueChange = { q = it }, enabled = !locked, singleLine = true,
-            placeholder = { Text(if (locked) "Locked while moving" else "Place, shop, address, landmark") },
-            leadingIcon = { Icon(if (locked) Icons.Rounded.Lock else Icons.Rounded.Search, null) },
-            trailingIcon = {
-                if (q.isNotEmpty()) {
-                    Box(Modifier.size(40.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Close, "Clear")
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        Modifier.fillMaxSize().background(p.bg).safeDrawingPadding(),
+    ) {
+        val portrait = maxHeight > maxWidth
+        LaunchedEffect(Unit) {
+            PlaceSearch.newSession()
+            if (portrait && !locked) {
+                delay(200)
+                try { focus.requestFocus() } catch (_: Exception) { }
+            }
+        }
+        Column(
+            Modifier.align(Alignment.TopCenter).widthIn(max = 780.dp).fillMaxSize().padding(horizontal = 12.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PopIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", kind = PopKind.Secondary, size = 46.dp, onClick = close)
+                OutlinedTextField(
+                    value = q, onValueChange = { q = it }, enabled = !locked, singleLine = true,
+                    placeholder = { Text(if (locked) "Locked while moving · use the mic" else "Search a place, shop, address") },
+                    leadingIcon = { Icon(if (locked) Icons.Rounded.Lock else Icons.Rounded.Search, null) },
+                    trailingIcon = {
+                        if (q.isNotEmpty()) {
+                            Box(Modifier.size(40.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Close, "Clear")
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { hideKeyboard() }),
+                    shape = RoundedCornerShape(50), colors = riderFieldColors(),
+                    modifier = Modifier.weight(1f).focusRequester(focus),
+                )
+                PopIcon(Icons.Rounded.Mic, "Say a place", kind = PopKind.Accent, size = 46.dp) { close(); act.startVoice() }
+            }
+
+            androidx.compose.foundation.lazy.LazyColumn(
+                Modifier.weight(1f).fillMaxWidth(),
+                state = list,
+                contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                when {
+                    busy && results.isEmpty() -> item {
+                        Text("Searching…", fontSize = 14.sp, color = p.muted, modifier = Modifier.padding(8.dp))
+                    }
+                    results.isNotEmpty() -> {
+                        item { Label(if (google == PlaceSearch.Google.OK) "Results · Google" else "Results", Modifier.padding(start = 6.dp, top = 4.dp)) }
+                        items(results.size) { i ->
+                            val pl = results[i]
+                            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.glass)) {
+                                ResultRow(pl, onShow = { show(pl) }, onGo = { hideKeyboard(); close(); Navigator.previewPlace(ctx, pl) })
+                            }
+                        }
+                    }
+                    searched.isNotEmpty() -> item {
+                        Column(Modifier.padding(horizontal = 6.dp)) {
+                            Text("No matches for “$searched”.", fontSize = 14.sp, color = p.muted, modifier = Modifier.padding(top = 6.dp))
+                            PillButton("Find “$searched” in Google Maps", Modifier.fillMaxWidth().padding(top = 8.dp), primary = false, icon = Icons.Rounded.Search) {
+                                inGoogleMaps(searched)
+                            }
+                            Text(
+                                "Then tap Share → RiderDeck in Google Maps and the route opens here.",
+                                fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
                     }
                 }
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = {
-                val first = results.firstOrNull()
-                if (first != null) show(first) else if (q.isNotBlank() && !busy) inGoogleMaps(q.trim())
-            }),
-            shape = RoundedCornerShape(16.dp), colors = riderFieldColors(),
-            modifier = Modifier.weight(1f).focusRequester(focus),
-        )
-        RoundFab(Icons.Rounded.Mic, "Say a place", true) { close(); act.startVoice() }
-    }
-
-    when {
-        busy && results.isEmpty() -> Text("Searching…", fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp, start = 4.dp))
-        results.isNotEmpty() -> {
-            SectionTitle(if (google == PlaceSearch.Google.OK) "Results · Google" else "Results")
-            Group {
-                results.forEach { pl ->
-                    ResultRow(pl, onShow = { show(pl) }, onGo = { close(); Navigator.previewPlace(ctx, pl) })
+                if (google == PlaceSearch.Google.OFF && q.isNotBlank()) item {
+                    Text(
+                        "Google search is off for your Maps key, so these come from OpenStreetMap. Turn on “Places API (New)” for the key to get Google Maps results here.",
+                        fontSize = 12.sp, color = p.warn, lineHeight = 16.sp, modifier = Modifier.padding(horizontal = 6.dp),
+                    )
+                }
+                if (q.isBlank()) {
+                    item { Label("Saved", Modifier.padding(start = 6.dp, top = 4.dp)) }
+                    park?.let { pk -> item { ParkingTile(pk, close) } }
+                    item {
+                        Tile(Icons.Rounded.Home, p.blue, "Home", s.home.ifBlank { "Tap to set your home address" }) {
+                            if (s.home.isBlank()) open("settings") else go(s.home)
+                        }
+                    }
+                    item {
+                        Tile(Icons.Rounded.Work, p.cyan, "Office", s.office.ifBlank { "Tap to set your office address" }) {
+                            if (s.office.isBlank()) open("settings") else go(s.office)
+                        }
+                    }
+                    item {
+                        Tile(Icons.Rounded.LocalGasStation, p.warn, "Nearby", "Petrol, puncture shop, air, mechanic, hospital") { open("near") }
+                    }
+                    item {
+                        Text(
+                            "“Go” plans a two-wheeler route on the RiderDeck map with voice turn-by-turn.",
+                            fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                        )
+                    }
                 }
             }
         }
-        searched.isNotEmpty() -> {
-            Text("No matches for “$searched”.", fontSize = 14.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp, start = 4.dp))
-            PillButton("Find “$searched” in Google Maps", Modifier.fillMaxWidth().padding(top = 8.dp), primary = false, icon = Icons.Rounded.Search) {
-                inGoogleMaps(searched)
-            }
-            Text(
-                "Then tap Share → RiderDeck in Google Maps and the route opens here.",
-                fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 8.dp, start = 4.dp),
-            )
-        }
-    }
-    if (google == PlaceSearch.Google.OFF && q.isNotBlank()) {
-        Text(
-            "Google search is off for your Maps key, so these come from OpenStreetMap. Turn on “Places API (New)” for the key to get Google Maps results here.",
-            fontSize = 12.sp, color = p.warn, lineHeight = 16.sp, modifier = Modifier.padding(top = 10.dp, start = 4.dp),
-        )
-    }
-
-    if (q.isBlank()) {
-        SectionTitle("Saved")
-        val park by RiderApp.prefs.parking.collectAsState()
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            park?.let { ParkingTile(it, close) }
-            Tile(Icons.Rounded.Home, p.blue, "Home", s.home.ifBlank { "Tap to set your home address" }) {
-                if (s.home.isBlank()) open("settings") else go(s.home)
-            }
-            Tile(Icons.Rounded.Work, p.cyan, "Office", s.office.ifBlank { "Tap to set your office address" }) {
-                if (s.office.isBlank()) open("settings") else go(s.office)
-            }
-            Tile(Icons.Rounded.LocalGasStation, p.warn, "Nearby", "Petrol, puncture shop, air, mechanic, hospital") { open("near") }
-        }
-        Text(
-            "“Go” plans a two-wheeler route on the RiderDeck map with voice turn-by-turn. You can still hand it to Google Maps from the route card.",
-            fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp),
-        )
     }
 }
 

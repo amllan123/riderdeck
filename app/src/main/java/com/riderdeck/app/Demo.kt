@@ -40,7 +40,7 @@ object Demo {
         val lat = 12.9716
         val lon = 77.6412
         Hub.ride.value = RideState(
-            speedKmh = 47f, hasFix = true, tripKm = 12.4, movingSecs = 1980.0, topKmh = 72f,
+            speedKmh = if (intent.getBooleanExtra("parked", false)) 0f else 47f, hasFix = true, tripKm = 12.4, movingSecs = 1980.0, topKmh = 72f,
             altitudeM = 912.0, leanDeg = 14f, maxLeanDeg = 28f, lat = lat, lon = lon, bearing = 20f, fuelKm = 120f,
         )
         Hub.listenerConnected.value = true
