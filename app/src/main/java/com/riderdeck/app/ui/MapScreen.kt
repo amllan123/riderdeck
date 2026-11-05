@@ -146,7 +146,8 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
             when {
                 ru.navigating && ru.next != null -> TurnBanner(
                     key = ru.next!!.begin, icon = maneuverIcon(ru.next!!.type), bitmap = null,
-                    distance = shortDistance(ru.toNextM), street = streetOf(ru.next!!.instruction),
+                    distance = shortDistance(ru.toNextM),
+                    street = if (ru.next!!.type in 4..6) "Arrive at ${ru.route?.dest?.title ?: "destination"}" else streetOf(ru.next!!.instruction),
                     then = ru.after,
                 ) { Hub.follow.value = true }
                 nav.active -> TurnBanner(

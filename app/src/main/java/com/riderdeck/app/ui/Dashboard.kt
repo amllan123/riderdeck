@@ -350,7 +350,8 @@ fun SpeedPanel(ride: RideState, s: RiderSettings, compact: Boolean, open: (Strin
         if (compact) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 MiniStat("%.1f".format(live.km), "km")
-                MiniStat(duration(rideSecs), "ride time")
+                val mins = (rideSecs / 60).toInt()
+                if (mins < 60) MiniStat("$mins", "min") else MiniStat("${mins / 60}:${(mins % 60).toString().padStart(2, '0')}", "h")
                 MiniStat("$range", "km left", if (range < 25) p.warn else p.fg)
             }
         } else {
@@ -424,7 +425,7 @@ fun rememberNow(ticking: Boolean): Long {
 
 fun duration(secs: Double): String {
     val m = (secs / 60).toInt()
-    return "${m / 60}:${(m % 60).toString().padStart(2, '0')}"
+    return if (m < 60) "$m min" else "${m / 60}h ${(m % 60).toString().padStart(2, '0')}m"
 }
 
 @Composable
