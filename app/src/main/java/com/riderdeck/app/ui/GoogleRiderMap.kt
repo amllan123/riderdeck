@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -35,37 +36,62 @@ import com.riderdeck.app.Pin
 import com.riderdeck.app.RideState
 import com.riderdeck.app.RouteUi
 
-/** Day: Google's normal look without shop/POI clutter, like Google Maps in navigation. */
+/** Day / sunlight: high contrast for glare — dark labels, outlined roads, no shop clutter. */
 private const val DAY_STYLE = """[
+{"elementType":"labels.text.fill","stylers":[{"color":"#1f2328"}]},
+{"elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"},{"weight":3}]},
+{"featureType":"landscape.man_made","elementType":"geometry","stylers":[{"color":"#e3e6ea"}]},
+{"featureType":"landscape.natural","elementType":"geometry","stylers":[{"color":"#eef0f2"}]},
 {"featureType":"poi","elementType":"labels","stylers":[{"visibility":"off"}]},
 {"featureType":"poi.business","stylers":[{"visibility":"off"}]},
-{"featureType":"poi.park","elementType":"geometry","stylers":[{"visibility":"on"}]},
+{"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#ffffff"}]},
+{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#8d949e"}]},
+{"featureType":"road","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+{"featureType":"road.highway","elementType":"geometry.fill","stylers":[{"color":"#ffd76a"}]},
+{"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#b98a00"}]},
 {"featureType":"transit","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
-{"featureType":"road","elementType":"labels.icon","stylers":[{"visibility":"off"}]}
+{"featureType":"water","elementType":"geometry","stylers":[{"color":"#9cc3ef"}]}
 ]"""
 
-/** Night: Google's navigation night palette, no shop/POI clutter. */
+/** Night: the RiderDeck neon look — deep navy blocks, quiet streets, no clutter. */
 private const val NIGHT_STYLE = """[
-{"elementType":"geometry","stylers":[{"color":"#1d2333"}]},
-{"elementType":"labels.text.fill","stylers":[{"color":"#8e9bb3"}]},
-{"elementType":"labels.text.stroke","stylers":[{"color":"#1d2333"}]},
-{"featureType":"administrative","elementType":"geometry","stylers":[{"color":"#3a4560"}]},
-{"featureType":"landscape.man_made","elementType":"geometry","stylers":[{"color":"#181d29"}]},
-{"featureType":"poi","elementType":"labels","stylers":[{"visibility":"off"}]},
-{"featureType":"poi.business","stylers":[{"visibility":"off"}]},
-{"featureType":"poi","elementType":"geometry","stylers":[{"color":"#20293a"}]},
-{"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#1a3a33"}]},
-{"featureType":"road","elementType":"geometry","stylers":[{"color":"#34405a"}]},
-{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#1d2333"}]},
-{"featureType":"road","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
-{"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#c3cde0"}]},
-{"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#46536f"}]},
-{"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#5b6a8a"}]},
-{"featureType":"road.highway","elementType":"labels.text.fill","stylers":[{"color":"#e6ecf7"}]},
+{"elementType":"geometry","stylers":[{"color":"#0c111b"}]},
+{"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+{"elementType":"labels.text.fill","stylers":[{"color":"#6b7891"}]},
+{"elementType":"labels.text.stroke","stylers":[{"color":"#090d15"}]},
+{"featureType":"administrative","elementType":"geometry","stylers":[{"visibility":"off"}]},
+{"featureType":"landscape.man_made","elementType":"geometry","stylers":[{"color":"#131a27"}]},
+{"featureType":"landscape.natural","elementType":"geometry","stylers":[{"color":"#0c111b"}]},
+{"featureType":"poi","stylers":[{"visibility":"off"}]},
+{"featureType":"poi.park","elementType":"geometry","stylers":[{"visibility":"on"},{"color":"#0c1c19"}]},
+{"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#1a2333"}]},
+{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#090d15"}]},
+{"featureType":"road.arterial","elementType":"geometry.fill","stylers":[{"color":"#222c40"}]},
+{"featureType":"road.highway","elementType":"geometry.fill","stylers":[{"color":"#2a3753"}]},
+{"featureType":"road.highway","elementType":"labels.text.fill","stylers":[{"color":"#94a0b6"}]},
 {"featureType":"transit","stylers":[{"visibility":"off"}]},
-{"featureType":"water","elementType":"geometry","stylers":[{"color":"#0f2a46"}]},
-{"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#5d7ea3"}]}
+{"featureType":"water","elementType":"geometry","stylers":[{"color":"#0a1a2c"}]}
 ]"""
+
+/** Soft blue light cone that points where you're heading (neon night look). */
+private fun coneBitmap(px: Int): Bitmap {
+    val b = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+    val c = Canvas(b)
+    val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    p.shader = android.graphics.RadialGradient(
+        px / 2f, px.toFloat(), px.toFloat(),
+        intArrayOf(0x993D8BFF.toInt(), 0x403D8BFF, 0x003D8BFF), floatArrayOf(0f, 0.45f, 1f),
+        android.graphics.Shader.TileMode.CLAMP,
+    )
+    val path = Path().apply {
+        moveTo(px / 2f, px.toFloat())
+        lineTo(px * 0.5f - px * 0.42f, 0f)
+        lineTo(px * 0.5f + px * 0.42f, 0f)
+        close()
+    }
+    c.drawPath(path, p)
+    return b
+}
 
 /** Google-blue navigation arrow with white rim and soft halo, like the one in Google Maps. */
 private fun arrowBitmap(px: Int): Bitmap {
@@ -102,7 +128,7 @@ private fun dotBitmap(px: Int): Bitmap {
     c.drawCircle(cx, cx, px * 0.48f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x331A73E8 })
     c.drawCircle(cx, cx + px * 0.015f, px * 0.24f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x44000000 })
     c.drawCircle(cx, cx, px * 0.23f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() })
-    c.drawCircle(cx, cx, px * 0.17f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1A73E8.toInt() })
+    c.drawCircle(cx, cx, px * 0.17f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF3D8BFF.toInt() })
     return b
 }
 
@@ -188,11 +214,20 @@ fun GoogleRiderMap(
         }
     }
 
-    val routeOuter = if (dark) Color(0xFF0B3C8C) else Color(0xFF1558D6)
-    val routeInner = if (dark) Color(0xFF669DF6) else Color(0xFF4C8DF6)
-    val ridden = if (dark) Color(0xFF5F6B82) else Color(0xFFA6AEBB)
-    val outerW = with(density) { 12.dp.toPx() }
-    val innerW = with(density) { 8.dp.toPx() }
+    // Route colours: neon glow at night, deep blue with a dark edge in sunlight (glare-proof).
+    val routeCore = if (dark) Color(0xFF3D8BFF) else Color(0xFF0B57D0)
+    val routeEdge = if (dark) Color(0x593D8BFF) else Color(0xFF062E6F)
+    val ridden = if (dark) Color(0xFF334058) else Color(0xFF9AA3AF)
+    val glowW = with(density) { 26.dp.toPx() }
+    val edgeW = with(density) { (if (dark) 15.dp else 13.dp).toPx() }
+    val coreW = with(density) { (if (dark) 7.dp else 9.dp).toPx() }
+    val shineW = with(density) { 2.dp.toPx() }
+    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "pulse")
+    val ring by pulse.animateFloat(
+        0f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1600, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "ring",
+    )
 
     GoogleMap(
         modifier = modifier,
@@ -219,12 +254,18 @@ fun GoogleRiderMap(
             val pts = remember(r) { r.points.map { LatLng(it.lat, it.lon) } }
             val split = ru.doneIdx.coerceIn(0, pts.size - 1)
             if (split > 0) {
-                Polyline(points = pts.subList(0, split + 1), color = ridden, width = innerW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 1f)
+                Polyline(points = pts.subList(0, split + 1), color = ridden, width = coreW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 1f)
             }
             val ahead = pts.subList(split, pts.size)
             if (ahead.size >= 2) {
-                Polyline(points = ahead, color = routeOuter, width = outerW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 2f)
-                Polyline(points = ahead, color = routeInner, width = innerW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 3f)
+                if (dark) {
+                    Polyline(points = ahead, color = Color(0x263D8BFF), width = glowW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 2f)
+                }
+                Polyline(points = ahead, color = routeEdge, width = edgeW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 3f)
+                Polyline(points = ahead, color = routeCore, width = coreW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 4f)
+                if (dark) {
+                    Polyline(points = ahead, color = Color(0x73FFFFFF), width = shineW, jointType = JointType.ROUND, startCap = RoundCap(), endCap = RoundCap(), zIndex = 5f)
+                }
             }
         }
         if (pin != null) {
@@ -236,7 +277,28 @@ fun GoogleRiderMap(
             val dot = remember(px) { BitmapDescriptorFactory.fromBitmap(dotBitmap(px)) }
             val puck = remember { MarkerState() }
             SideEffect { puck.position = LatLng(ride.lat, ride.lon) }
-            val showArrow = moving || ru.navigating
+            val showArrow = !dark && (moving || ru.navigating)
+            val here = LatLng(ride.lat, ride.lon)
+            if (dark) {
+                if (moving || ru.navigating) {
+                    val cone = remember { BitmapDescriptorFactory.fromBitmap(coneBitmap(256)) }
+                    com.google.maps.android.compose.GroundOverlay(
+                        position = com.google.maps.android.compose.GroundOverlayPosition.create(here, 70f),
+                        image = cone,
+                        anchor = Offset(0.5f, 1f),
+                        bearing = heading,
+                        zIndex = 6f,
+                    )
+                }
+                com.google.maps.android.compose.Circle(
+                    center = here,
+                    radius = 6.0 + 26.0 * ring,
+                    strokeColor = Color(0xFF3D8BFF).copy(alpha = (1f - ring) * 0.9f),
+                    strokeWidth = with(density) { 2.dp.toPx() },
+                    fillColor = Color(0xFF3D8BFF).copy(alpha = (1f - ring) * 0.12f),
+                    zIndex = 7f,
+                )
+            }
             Marker(
                 state = puck,
                 icon = if (showArrow) arrow else dot,

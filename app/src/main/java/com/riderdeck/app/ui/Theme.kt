@@ -128,13 +128,14 @@ val DarkPal = Pal(
     pop = Color(0xFF8B7BFF), onPop = Color.White, pop2 = Color(0xFF22D3EE),
 )
 
+/** Sunlight: built for glare — pure black on white, darker greys, deeper accents. */
 val SunPal = Pal(
-    bg = Color(0xFFEEF1F6), panel = Color(0xFFFFFFFF), panelHi = Color(0xFFF8FAFD), stroke = Color(0x140F172A),
-    fg = Color(0xFF0B1220), muted = Color(0xFF5B6475), faint = Color(0xFFA0A8B8), glass = Color(0x0A0F172A),
-    blue = Color(0xFF1A62E8), cyan = Color(0xFF0891B2), ok = Color(0xFF0E9F6E), warn = Color(0xFFB45309), bad = Color(0xFFE5383B),
+    bg = Color(0xFFE6E9EE), panel = Color(0xFFFFFFFF), panelHi = Color(0xFFFFFFFF), stroke = Color(0x22000000),
+    fg = Color(0xFF000000), muted = Color(0xFF2F333B), faint = Color(0xFF5B616D), glass = Color(0x12000000),
+    blue = Color(0xFF0B57D0), cyan = Color(0xFF006C8A), ok = Color(0xFF036B47), warn = Color(0xFF8A4B00), bad = Color(0xFFC81E1E),
     sheet = Color(0xFFFFFFFF), dark = false,
     edgeR = Color.Transparent, edgeB = Color.Transparent,
-    pop = Color(0xFF6D4CFF), onPop = Color.White, pop2 = Color(0xFF0891B2),
+    pop = Color(0xFF4B2BE0), onPop = Color.White, pop2 = Color(0xFF006C8A),
 )
 
 val LocalPal = staticCompositionLocalOf { DarkPal }

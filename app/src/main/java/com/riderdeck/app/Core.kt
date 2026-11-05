@@ -92,6 +92,9 @@ object Hub {
     val crashCountdown = MutableStateFlow<Int?>(null)
     val voice = MutableStateFlow<VoiceState?>(null)
     val listenerConnected = MutableStateFlow(false)
+    /** Light sensor says we're in bright sunlight (with hysteresis). */
+    val bright = MutableStateFlow(false)
+    var hasLightSensor = false
     /** A searched place shown on the map. */
     val pin = MutableStateFlow<Pin?>(null)
     /** True while the map keeps itself centred on you. Moving the map turns it off. */

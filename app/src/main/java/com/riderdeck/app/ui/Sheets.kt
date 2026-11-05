@@ -520,11 +520,11 @@ private fun SettingsSheet(act: MainActivity) {
     Group {
         ToggleRow("Read messages aloud", "WhatsApp and SMS, in your earphones", s.readMessages) { v -> prefs.edit { it.copy(readMessages = v) } }
         ToggleRow("Crash detection", "Hard impact then stop → 15 s countdown → SMS to contacts", s.crashDetection) { v -> prefs.edit { it.copy(crashDetection = v) } }
-        ToggleRow("Heat guard", "Dims the screen when the phone passes 43°C", s.heatGuard) { v -> prefs.edit { it.copy(heatGuard = v) } }
+        ToggleRow("Heat guard", "Voice warning when the phone gets too hot", s.heatGuard) { v -> prefs.edit { it.copy(heatGuard = v) } }
         ToggleRow("Ride lock", "No typing while moving", s.rideLock) { v -> prefs.edit { it.copy(rideLock = v) } }
         ToggleRow("Glove mode", "Bigger buttons", s.gloves) { v -> prefs.edit { it.copy(gloves = v) } }
-        ToggleRow("Auto day / night", "Bright screen from sunrise to sunset, dark after", s.autoTheme) { v -> prefs.edit { it.copy(autoTheme = v) } }
-        if (!s.autoTheme) ToggleRow("Sunlight mode", "Bright, high-contrast screen for daytime", s.sunlight) { v -> prefs.edit { it.copy(sunlight = v) } }
+        ToggleRow("Auto sunlight mode", "Switches to the high-contrast screen in bright sun and back to dark in shade or at night", s.autoTheme) { v -> prefs.edit { it.copy(autoTheme = v) } }
+        if (!s.autoTheme) ToggleRow("Sunlight mode", "High-contrast black-on-white screen for glare", s.sunlight) { v -> prefs.edit { it.copy(sunlight = v) } }
     }
     Text("RiderDeck build ${com.riderdeck.app.BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = p.faint, modifier = Modifier.padding(top = 16.dp))
 }

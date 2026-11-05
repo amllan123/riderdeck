@@ -91,7 +91,12 @@ class MainActivity : ComponentActivity() {
                     minute = System.currentTimeMillis()
                 }
             }
-            val sun = if (s.autoTheme) remember(w, minute) { Weather.isDaylight(minute) } else s.sunlight
+            val bright by Hub.bright.collectAsState()
+            val sun = when {
+                !s.autoTheme -> s.sunlight
+                Hub.hasLightSensor -> bright
+                else -> remember(w, minute) { Weather.isDaylight(minute) }
+            }
             RiderTheme(sun = sun, gloves = s.gloves) {
                 RiderRoot(this)
             }
@@ -133,8 +138,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var brightSince = 0L
+    private var dimSince = 0L
+    private val lightListener = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(e: android.hardware.SensorEvent) {
+            val lux = e.values[0]
+            val now = android.os.SystemClock.elapsedRealtime()
+            when {
+                lux > 6000f -> {
+                    dimSince = 0L
+                    if (brightSince == 0L) brightSince = now
+                    if (!Hub.bright.value && now - brightSince > 3000) Hub.bright.value = true
+                }
+                lux < 1500f -> {
+                    brightSince = 0L
+                    if (dimSince == 0L) dimSince = now
+                    if (Hub.bright.value && now - dimSince > 8000) Hub.bright.value = false
+                }
+                else -> {
+                    brightSince = 0L
+                    dimSince = 0L
+                }
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+    }
+
     override fun onStart() {
         super.onStart()
+        val sm = getSystemService(android.hardware.SensorManager::class.java)
+        sm?.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT)?.let {
+            Hub.hasLightSensor = true
+            sm.registerListener(lightListener, it, android.hardware.SensorManager.SENSOR_DELAY_NORMAL)
+        }
         ContextCompat.registerReceiver(
             this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED
         )
@@ -143,6 +180,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        getSystemService(android.hardware.SensorManager::class.java)?.unregisterListener(lightListener)
         try {
             unregisterReceiver(batteryReceiver)
         } catch (_: Exception) {
@@ -207,19 +245,17 @@ class MainActivity : ComponentActivity() {
 
     /* ---------------- heat guard ---------------- */
 
+    private var hotWarned = false
+
+    /** Hot phone: warn by voice. Never dims — a dim screen is unreadable in sunlight. */
     private fun applyHeatGuard(tempC: Float) {
         val guard = RiderApp.prefs.s.value.heatGuard
-        val lp = window.attributes
-        if (guard && tempC >= 43f && !dimmed) {
-            dimmed = true
-            lp.screenBrightness = 0.3f
-            window.attributes = lp
-            Speaker.say("Phone is getting hot. Dimming the screen.")
-        } else if (dimmed && (tempC < 40f || !guard)) {
-            dimmed = false
-            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-            window.attributes = lp
-            Hub.toast("Phone cooled down. Full brightness is back")
+        if (guard && tempC >= 45f && !hotWarned) {
+            hotWarned = true
+            Speaker.say("Phone is getting hot. Keep it out of direct sun and unplug the charger if you can.")
+            Hub.toast("Phone hot · ${tempC.toInt()}°C · shade it and unplug the charger")
+        } else if (tempC < 41f) {
+            hotWarned = false
         }
     }
 

@@ -122,6 +122,12 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
         } else {
             RiderMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
         }
+        if (p.dark) {
+            Box(
+                Modifier.fillMaxWidth().height(110.dp)
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(p.bg.copy(alpha = 0.75f), Color.Transparent)))
+            )
+        }
 
         Column(
             Modifier.align(Alignment.TopStart).padding(10.dp).fillMaxWidth(),
