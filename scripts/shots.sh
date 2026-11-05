@@ -60,18 +60,18 @@ adb shell am force-stop $PKG
 adb shell settings put system user_rotation 1
 adb shell wm user-rotation lock 1 || true
 sleep 3
-adb logcat -c
+timeout 20 adb logcat -c || true
 adb shell am start -W -n $ACT --ez sim true --ez selftest true
 sleep 2
-adb shell dumpsys gfxinfo $PKG reset > /dev/null
+timeout 30 adb shell dumpsys gfxinfo $PKG reset > /dev/null || true
 sleep 26
 adb exec-out screencap -p > "$OUT/shot-5-sim-riding.png"
 sleep 22
 adb exec-out screencap -p > "$OUT/shot-6-sim-traffic-stop.png"
 sleep 35
 adb exec-out screencap -p > "$OUT/shot-7-sim-riding-on.png"
-adb shell dumpsys gfxinfo $PKG > "$OUT/gfxinfo.txt"
-adb logcat -d -v time -s "RiderSim:*" "RiderSelfTest:*" "RiderSearch:*" "RiderShare:*" "RideLoop:*" "RideService:*" "AndroidRuntime:E" > "$OUT/selftest.txt"
-adb logcat -d -v time "*:E" > "$OUT/errors.txt"
+timeout 60 adb shell dumpsys gfxinfo $PKG > "$OUT/gfxinfo.txt"
+timeout 60 adb logcat -d -v time -s "RiderSim:*" "RiderSelfTest:*" "RiderSearch:*" "RiderShare:*" "RideLoop:*" "RideService:*" "AndroidRuntime:E" > "$OUT/selftest.txt"
+timeout 60 adb logcat -d -v time "*:E" > "$OUT/errors.txt"
 ls -la "$OUT"
 exit 0
