@@ -15,6 +15,7 @@ adb shell settings put global animator_duration_scale 1
 adb install -r -g "$APK" || exit 0
 # no "Viewing full screen" hint, fixed rotation
 adb shell settings put secure immersive_mode_confirmations confirmed
+adb shell settings put global hide_error_dialogs 1
 adb shell settings put system accelerometer_rotation 0
 
 shot() { # name rotation [extra am args]
