@@ -158,10 +158,10 @@ fun Dashboard(act: MainActivity) {
             if (landscape) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Rail(true, dev, open, Modifier.width(66.dp).fillMaxHeight())
-                    SpeedPanel(ride, s, false, open, act, Modifier.weight(0.26f).fillMaxHeight())
-                    MapPanel(ride, nav, act, open, Modifier.weight(0.47f).fillMaxHeight())
-                    Column(Modifier.weight(0.27f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        MusicPanel(media, listener, false, open, Modifier.weight(1.3f).fillMaxWidth())
+                    SpeedPanel(ride, s, false, open, act, Modifier.weight(0.22f).fillMaxHeight())
+                    MapPanel(ride, nav, act, open, Modifier.weight(0.52f).fillMaxHeight())
+                    Column(Modifier.weight(0.26f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        MusicPanel(media, listener, false, open, Modifier.weight(1.15f).fillMaxWidth())
                         InfoPanel(ride, dev, false, Modifier.weight(1f).fillMaxWidth())
                     }
                 }
@@ -396,216 +396,6 @@ fun SpeedRing(kmh: Float, over: Boolean, modifier: Modifier) {
     }
 }
 
-/* ---------------- map ---------------- */
-
-@Composable
-fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -> Unit, modifier: Modifier) {
-    val p = LocalPal.current
-    val pin by Hub.pin.collectAsState()
-    val follow by Hub.follow.collectAsState()
-    val ru by Navigator.state.collectAsState()
-    val routeCard = ru.loading || ru.route != null
-    Box(modifier.panel()) {
-        if (BuildConfig.HAS_MAPS_KEY) {
-            GoogleRiderMap(ride, p.dark, pin, follow, ru, if (routeCard) 118 else 0, Modifier.fillMaxSize())
-        } else {
-            RiderMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
-        }
-        Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(p.panel.copy(alpha = 0.9f), Color.Transparent))))
-        Column(Modifier.align(Alignment.TopStart).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TurnCard(nav, ru, Modifier) {
-                when {
-                    ru.navigating -> { Hub.follow.value = true }
-                    nav.active -> { Nav.openMaps(act) }
-                    else -> { open("goto") }
-                }
-            }
-            if (pin != null && ru.route == null && !ru.loading) PinChip(pin!!)
-        }
-        Column(
-            Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = if (routeCard) 118.dp else 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            if (!follow) RoundFab(Icons.Rounded.MyLocation, "Back to my location", false) { Hub.follow.value = true }
-            if (!ru.navigating) RoundFab(Icons.Rounded.Search, "Search places", false) { open("goto") }
-            RoundFab(Icons.Rounded.Mic, "Voice command", true) { act.startVoice() }
-        }
-        if (routeCard) {
-            RouteCard(ru, act, Modifier.align(Alignment.BottomCenter).padding(10.dp).fillMaxWidth())
-        } else if (!ride.hasFix) {
-            Row(
-                Modifier.align(Alignment.BottomStart).padding(10.dp).clip(RoundedCornerShape(99.dp))
-                    .background(p.sheet.copy(alpha = 0.9f)).padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Dot(p.warn)
-                Text("Finding GPS…", fontSize = 12.sp, color = p.fg)
-            }
-        } else if (nav.active && nav.extra.isNotBlank()) {
-            Text(
-                nav.extra, fontSize = 13.sp, color = p.ok, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).clip(RoundedCornerShape(14.dp))
-                    .background(p.sheet.copy(alpha = 0.92f)).padding(horizontal = 12.dp, vertical = 8.dp),
-            )
-        }
-    }
-}
-
-/** Route summary under the map: planning → preview (Start / Google Maps) → navigating (End). */
-@Composable
-private fun RouteCard(ru: RouteUi, act: MainActivity, modifier: Modifier) {
-    val p = LocalPal.current
-    val r = ru.route
-    Column(
-        modifier.clip(RoundedCornerShape(22.dp)).background(p.sheet.copy(alpha = 0.96f))
-            .border(1.dp, p.stroke, RoundedCornerShape(22.dp)).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (r == null) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Dot(p.blue)
-                Text("Finding a two-wheeler route…", fontSize = 14.sp, color = p.fg)
-                Spacer(Modifier.weight(1f))
-                Text("Cancel", color = p.muted, fontSize = 13.sp, modifier = Modifier.clickable { Navigator.stop() }.padding(6.dp))
-            }
-            return@Column
-        }
-        val meters = if (ru.navigating) ru.remainingM else r.lengthM
-        val secs = if (ru.navigating) ru.remainingS else r.timeS
-        val arrive = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(System.currentTimeMillis() + (secs * 1000).toLong()))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "${(secs / 60).roundToInt().coerceAtLeast(1)} min · ${"%.1f".format(meters / 1000)} km",
-                    fontSize = 18.sp, fontWeight = FontWeight.Black, color = p.ok, maxLines = 1,
-                )
-                Text("Arrive $arrive · ${r.dest.title}", fontSize = 12.5.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (ru.navigating) {
-                Text(
-                    "End", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(p.bad).clickable { Navigator.stop() }
-                        .padding(horizontal = 18.dp, vertical = 11.dp),
-                )
-            } else {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable { Navigator.stop() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Close, "Cancel route", tint = p.muted)
-                }
-            }
-        }
-        if (!ru.navigating) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PillButton("Start", Modifier.weight(1f), icon = Icons.Rounded.Navigation) { Navigator.start() }
-                PillButton("Google Maps", Modifier.weight(1f), primary = false) { Nav.navigateTo(act, "${r.dest.lat},${r.dest.lon}") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PinChip(pin: Pin) {
-    val p = LocalPal.current
-    val km = PlaceSearch.distanceFromMe(pin.lat, pin.lon)
-    Row(
-        Modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(18.dp)).background(p.sheet.copy(alpha = 0.94f))
-            .padding(start = 12.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(Icons.Rounded.Place, null, tint = p.bad, modifier = Modifier.size(20.dp))
-        Column(Modifier.weight(1f, fill = false)) {
-            Text(pin.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (km != null) Text(formatKm(km), fontSize = 12.sp, color = p.muted)
-        }
-        Text(
-            "Route", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(p.blue, p.cyan)))
-                .clickable { Navigator.preview(pin) }.padding(horizontal = 16.dp, vertical = 9.dp),
-        )
-        Box(
-            Modifier.size(38.dp).clip(CircleShape).clickable { Navigator.stop() },
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.Close, "Clear", tint = p.muted, modifier = Modifier.size(20.dp)) }
-    }
-}
-
-fun formatKm(km: Float): String = if (km < 1f) "${(km * 1000).roundToInt()} m away" else if (km < 100f) "%.1f km away".format(km) else "${km.roundToInt()} km away"
-
-@Composable
-fun RoundFab(icon: ImageVector, desc: String, primary: Boolean, onClick: () -> Unit) {
-    val p = LocalPal.current
-    val g = LocalGlove.current
-    val sz = ((if (primary) 56 else 46) * g).dp
-    Box(
-        Modifier.size(sz).clip(if (primary) CircleShape else RoundedCornerShape(16.dp))
-            .background(if (primary) Brush.linearGradient(listOf(p.blue, p.cyan)) else SolidColor(p.sheet.copy(alpha = 0.9f)))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, desc, tint = if (primary) Color.White else p.fg) }
-}
-
-fun maneuverIcon(type: Int): ImageVector = when (type) {
-    9, 18, 20, 23 -> Icons.Rounded.TurnSlightRight
-    10 -> Icons.Rounded.TurnRight
-    11 -> Icons.Rounded.TurnSharpRight
-    12 -> Icons.Rounded.UTurnRight
-    13 -> Icons.Rounded.UTurnLeft
-    14 -> Icons.Rounded.TurnSharpLeft
-    15 -> Icons.Rounded.TurnLeft
-    16, 19, 21, 24 -> Icons.Rounded.TurnSlightLeft
-    4, 5, 6 -> Icons.Rounded.Flag
-    26, 27 -> Icons.Rounded.Loop
-    else -> Icons.Rounded.Straight
-}
-
-fun shortDistance(m: Double): String = when {
-    m >= 1000 -> "%.1f km".format(m / 1000)
-    m >= 100 -> "${(m / 10).roundToInt() * 10} m"
-    else -> "${(m / 5).roundToInt() * 5} m"
-}
-
-@Composable
-fun TurnCard(nav: NavState, ru: RouteUi, modifier: Modifier, onClick: () -> Unit) {
-    val p = LocalPal.current
-    val inApp = ru.navigating && ru.next != null
-    Row(
-        modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(22.dp)).background(p.sheet.copy(alpha = 0.94f))
-            .border(1.dp, p.stroke, RoundedCornerShape(22.dp)).clickable(onClick = onClick)
-            .padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(p.blue, p.cyan))),
-            contentAlignment = Alignment.Center,
-        ) {
-            val icon = nav.icon
-            when {
-                inApp -> Icon(maneuverIcon(ru.next!!.type), null, tint = Color.White, modifier = Modifier.size(36.dp))
-                nav.active && icon != null -> Image(icon.asImageBitmap(), null, Modifier.size(36.dp), colorFilter = ColorFilter.tint(Color.White))
-                else -> Icon(Icons.Rounded.Navigation, null, tint = Color.White, modifier = Modifier.size(28.dp))
-            }
-        }
-        Column {
-            when {
-                inApp -> {
-                    Text(shortDistance(ru.toNextM), fontSize = 24.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                    Text(ru.next!!.instruction, fontSize = 13.5.sp, color = p.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                nav.active -> {
-                    Text(nav.distance, fontSize = 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                    Text(nav.instruction, fontSize = 13.5.sp, color = p.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                else -> {
-                    Text("Where to?", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("Search a place to plan a route", fontSize = 13.sp, color = p.muted)
-                }
-            }
-        }
-    }
-}
-
 /* ---------------- music ---------------- */
 
 @Composable
@@ -804,62 +594,43 @@ fun weatherIcon(code: Int, day: Boolean): ImageVector = when (code) {
 fun InfoPanel(ride: RideState, dev: DeviceState, compact: Boolean, modifier: Modifier) {
     val p = LocalPal.current
     val w by Weather.state.collectAsState()
-    Column(
-        modifier.panel().clickable { Speaker.say(Weather.spoken()) }.padding(14.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val tint = when (w.code) {
-                0, 1 -> if (w.isDay) p.warn else p.cyan
-                in 51..67, in 80..82, in 95..99 -> p.blue
-                else -> p.muted
-            }
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+    val tint = when (w.code) {
+        0, 1 -> if (w.isDay) p.warn else p.cyan
+        in 51..67, in 80..82, in 95..99 -> p.blue
+        else -> p.muted
+    }
+    val rain = w.rainInMin
+    val rainText = when {
+        w.tempC == null -> "Checking…"
+        rain == null -> "Dry 2 hrs"
+        rain == 0 -> "Raining"
+        else -> "Rain in ~$rain min"
+    }
+    val weather: @Composable (Modifier) -> Unit = { m ->
+        Column(m.clickable { Speaker.say(Weather.spoken()) }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(weatherIcon(w.code, w.isDay), null, tint = tint, modifier = Modifier.size(26.dp))
-            }
-            Column {
                 Text(w.tempC?.let { "${it.roundToInt()}°" } ?: "--°", fontSize = 24.sp, fontWeight = FontWeight.Black, lineHeight = 26.sp)
-                Text(if (w.tempC == null) "Weather" else Weather.describe(w.code), fontSize = 12.sp, color = p.muted, maxLines = 1)
             }
-        }
-        val rain = w.rainInMin
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(Icons.Rounded.Umbrella, null, tint = if (rain != null) p.warn else p.ok, modifier = Modifier.size(16.dp))
-            Text(
-                when {
-                    w.tempC == null -> "Checking rain…"
-                    rain == null -> "Dry for 2 hours"
-                    rain == 0 -> "Raining now"
-                    else -> "Rain in ~$rain min"
-                },
-                fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (rain != null) p.warn else p.ok, maxLines = 1,
-            )
-        }
-        val heading = if (ride.speedKmh > 4f) compass(ride.bearing) else "--"
-        if (compact) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                MiniStat(Icons.Rounded.Explore, heading, Modifier.weight(1f))
-                MiniStat(Icons.Rounded.Terrain, if (ride.hasFix) "${ride.altitudeM.roundToInt()}m" else "--", Modifier.weight(1f))
-            }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                MiniStat(Icons.Rounded.Explore, heading, Modifier.weight(1f))
-                MiniStat(Icons.Rounded.Terrain, if (ride.hasFix) "${ride.altitudeM.roundToInt()} m" else "--", Modifier.weight(1f))
-                MiniStat(Icons.Rounded.Air, "${w.windKmh.roundToInt()} km/h", Modifier.weight(1f))
+            Text(if (w.tempC == null) "Weather" else Weather.describe(w.code), fontSize = 12.5.sp, color = p.muted, maxLines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(Icons.Rounded.Umbrella, null, tint = if (rain != null) p.warn else p.ok, modifier = Modifier.size(14.dp))
+                Text(rainText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (rain != null) p.warn else p.ok, maxLines = 2, lineHeight = 14.sp)
             }
         }
     }
-}
-
-@Composable
-private fun MiniStat(icon: ImageVector, value: String, modifier: Modifier) {
-    val p = LocalPal.current
-    Row(
-        modifier.clip(RoundedCornerShape(12.dp)).background(p.glass).padding(horizontal = 6.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-    ) {
-        Icon(icon, null, tint = p.muted, modifier = Modifier.size(14.dp))
-        Text(value, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    BoxWithConstraints(modifier.panel().padding(12.dp)) {
+        if (compact) {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                weather(Modifier.fillMaxWidth())
+                VolumeKnob(Modifier.weight(1f).fillMaxWidth())
+            }
+        } else {
+            val knob = minOf(maxHeight, maxWidth * 0.6f)
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                weather(Modifier.weight(1f))
+                VolumeKnob(Modifier.size(knob))
+            }
+        }
     }
 }

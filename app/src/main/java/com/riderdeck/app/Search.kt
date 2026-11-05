@@ -77,8 +77,11 @@ object PlaceSearch {
         }
         return list.filter { it.hasLatitude() && it.hasLongitude() }.map { a ->
             val line = a.getAddressLine(0) ?: ""
-            val name = a.featureName?.takeIf { it.isNotBlank() && !it.all { c -> c.isDigit() } }
-                ?: line.substringBefore(",").ifBlank { q }
+            fun good(x: String?) = x != null && x.trim().length > 2 && x.count { it.isLetter() } >= 3
+            val name = a.featureName?.takeIf { good(it) }
+                ?: listOf(a.premises, a.thoroughfare, a.subLocality, a.locality).firstOrNull { good(it) }
+                ?: line.split(",").map { it.trim() }.firstOrNull { good(it) }
+                ?: q
             Place(name, line, a.latitude, a.longitude, null)
         }
     }

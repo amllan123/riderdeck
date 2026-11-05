@@ -11,6 +11,7 @@ import android.hardware.SensorManager
 import android.location.Location
 import android.os.Looper
 import android.os.SystemClock
+import android.view.WindowManager
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -34,7 +35,8 @@ class RideTracker(private val ctx: Context) : SensorEventListener {
     private var running = false
 
     private var leanZero = 0f
-    private var calibrated = false
+    // Zero lean = phone upright on screen. "Set lean to zero" re-takes it from the current angle.
+    private var calibrated = true
     private var leanSmooth = 0f
     private var lastLeanPush = 0L
 
@@ -81,6 +83,13 @@ class RideTracker(private val ctx: Context) : SensorEventListener {
         calibrated = false
     }
 
+    private fun norm(a: Float): Float {
+        var d = a
+        while (d > 180f) d -= 360f
+        while (d < -180f) d += 360f
+        return d
+    }
+
     fun resetTrip() {
         Hub.ride.update { it.copy(tripKm = 0.0, movingSecs = 0.0, topKmh = 0f, maxLeanDeg = 0f) }
     }
@@ -121,19 +130,28 @@ class RideTracker(private val ctx: Context) : SensorEventListener {
         val now = SystemClock.elapsedRealtime()
         when (e.sensor.type) {
             Sensor.TYPE_GRAVITY -> {
-                // Angle of gravity in the screen plane. Works for any mount orientation after calibration.
-                val ang = Math.toDegrees(atan2(e.values[0].toDouble(), e.values[1].toDouble())).toFloat()
+                // Angle of gravity in the screen plane, corrected for how the screen is rotated,
+                // so an upright phone reads 0° in portrait or landscape.
+                val gx = e.values[0]
+                val gy = e.values[1]
+                val inPlane = sqrt(gx * gx + gy * gy)
+                @Suppress("DEPRECATION")
+                val rot = try {
+                    (ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
+                } catch (_: Exception) {
+                    0
+                }
+                val raw = Math.toDegrees(atan2(gx.toDouble(), gy.toDouble())).toFloat() - rot * 90f
                 if (!calibrated) {
-                    leanZero = ang
+                    leanZero = norm(raw)
                     calibrated = true
                 }
-                var d = ang - leanZero
-                while (d > 180f) d -= 360f
-                while (d < -180f) d += 360f
+                // Phone lying almost flat: lean can't be measured.
+                val d = if (inPlane < 4f) 0f else norm(raw - leanZero)
                 leanSmooth = leanSmooth * 0.85f + d * 0.15f
                 if (now - lastLeanPush > 100) {
                     lastLeanPush = now
-                    val lean = leanSmooth
+                    val lean = leanSmooth.coerceIn(-70f, 70f)
                     val moving = Hub.ride.value.speedKmh > 10f
                     Hub.ride.update {
                         it.copy(leanDeg = lean, maxLeanDeg = if (moving) max(it.maxLeanDeg, abs(lean)) else it.maxLeanDeg)

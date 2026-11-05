@@ -78,15 +78,17 @@ object Weather {
         var rainIn: Int? = null
         if (rainArr != null) {
             for (i in 0 until rainArr.length()) {
-                if (rainArr.optDouble(i, 0.0) >= 0.2) {
+                if (rainArr.optDouble(i, 0.0) >= 0.1) {
                     rainIn = i * 15
                     break
                 }
             }
         }
+        val code = cur.optInt("weather_code", -1)
+        if (code in 51..67 || code in 80..82 || code in 95..99) rainIn = 0
         WeatherState(
             tempC = cur.optDouble("temperature_2m").toFloat(),
-            code = cur.optInt("weather_code", -1),
+            code = code,
             windKmh = cur.optDouble("wind_speed_10m", 0.0).toFloat(),
             isDay = cur.optInt("is_day", 1) == 1,
             rainInMin = rainIn,

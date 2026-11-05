@@ -40,6 +40,12 @@ data class RouteUi(
     val toNextM: Double = 0.0,
     val remainingM: Double = 0.0,
     val remainingS: Double = 0.0,
+    /** Index of the route point you've reached; the line behind it is drawn grey. */
+    val doneIdx: Int = 0,
+    /** The turn after the next one, when it comes quickly ("Then ↰"). */
+    val after: Maneuver? = null,
+    /** Direction of the road ahead, for heading-up while stopped. */
+    val heading: Float? = null,
 )
 
 /** In-app routing and turn-by-turn guidance. */
@@ -70,7 +76,7 @@ object Navigator {
             if (route == null) {
                 state.value = RouteUi()
                 Hub.toast("Couldn't plan a route. Check your internet and try again")
-                if (wasNavigating) Speaker.say("Couldn't find a new route")
+                if (wasNavigating) Speaker.guide("Couldn't find a new route")
                 return@launch
             }
             idx = 0
@@ -95,7 +101,7 @@ object Navigator {
             if (hit == null) {
                 state.value = state.value.copy(loading = false)
                 Hub.toast("Couldn't find “$query”")
-                Speaker.say("Sorry, I couldn't find that place")
+                Speaker.guide("Sorry, I couldn't find that place")
                 return@launch
             }
             preview(Pin(hit.lat, hit.lon, hit.title), autoStart)
@@ -109,7 +115,7 @@ object Navigator {
         Hub.follow.value = true
         if (announce) {
             val mins = (r.timeS / 60).roundToInt().coerceAtLeast(1)
-            Speaker.say("Starting route to ${r.dest.title}. About $mins minutes.")
+            Speaker.guide("Starting route to ${r.dest.title}. About $mins minutes.")
         }
         update(Hub.ride.value, force = true)
     }
@@ -152,7 +158,7 @@ object Navigator {
             if (offRoute >= 3 && s.navigating && !s.loading) {
                 offRoute = 0
                 Hub.toast("Rerouting…")
-                Speaker.say("Rerouting")
+                Speaker.guide("Rerouting")
                 preview(r.dest, autoStart = true)
                 return
             }
@@ -165,7 +171,7 @@ object Navigator {
         val remaining = (r.lengthM - done).coerceAtLeast(0.0)
         val toDest = dist(ride.lat, ride.lon, r.dest.lat, r.dest.lon)
         if (toDest < 35 || remaining < 25) {
-            Speaker.say("You have arrived at ${r.dest.title}")
+            Speaker.guide("You have arrived at ${r.dest.title}")
             Hub.toast("You've arrived")
             stop()
             return
@@ -173,15 +179,29 @@ object Navigator {
         val next = r.maneuvers.firstOrNull { it.begin > idx } ?: r.maneuvers.lastOrNull()
         val toNext = next?.let { (r.cum[it.begin.coerceAtMost(r.cum.size - 1)] - done).coerceAtLeast(0.0) } ?: remaining
         val remS = if (r.lengthM > 0) r.timeS * remaining / r.lengthM else 0.0
-        state.value = s.copy(next = next, toNextM = toNext, remainingM = remaining, remainingS = remS)
+        val nextPos = next?.let { r.maneuvers.indexOf(it) } ?: -1
+        val after = if (nextPos >= 0) r.maneuvers.getOrNull(nextPos + 1)?.takeIf {
+            it.type != 4 && r.cum[it.begin.coerceAtMost(r.cum.size - 1)] - r.cum[next!!.begin.coerceAtMost(r.cum.size - 1)] < 250
+        } else null
+        var ahead = idx
+        while (ahead < r.points.size - 1 && r.cum[ahead] - r.cum[idx] < 30) ahead++
+        val heading = if (ahead > idx) {
+            val a = Location("").apply { latitude = r.points[idx].lat; longitude = r.points[idx].lon }
+            val b = Location("").apply { latitude = r.points[ahead].lat; longitude = r.points[ahead].lon }
+            (a.bearingTo(b) + 360f) % 360f
+        } else null
+        state.value = s.copy(
+            next = next, toNextM = toNext, remainingM = remaining, remainingS = remS,
+            doneIdx = idx, after = after, heading = heading,
+        )
 
         if (next != null) {
             val say = next.verbal.ifBlank { next.instruction }
             if (toNext in 220.0..480.0 && spoken.add("${next.begin}-far")) {
-                Speaker.say("In ${spokenDistance(toNext)}, ${say.replaceFirstChar { it.lowercase(Locale.ROOT) }}")
+                Speaker.guide("In ${spokenDistance(toNext)}, ${say.replaceFirstChar { it.lowercase(Locale.ROOT) }}")
             }
             if (toNext <= 110 && spoken.add("${next.begin}-near")) {
-                Speaker.say(say)
+                Speaker.guide(say)
             }
         }
     }

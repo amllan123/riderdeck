@@ -52,6 +52,13 @@ object Speaker : TextToSpeech.OnInitListener {
     fun stop() {
         tts?.stop()
     }
+
+    /** Voice guidance (turns, reroute, arrival) can be muted from the map; other alerts still speak. */
+    val guidanceMuted = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun guide(text: String) {
+        if (!guidanceMuted.value) say(text)
+    }
 }
 
 /* ---------------- permissions ---------------- */
