@@ -235,7 +235,8 @@ fun GoogleRiderMap(
         cameraPositionState = cam,
         contentPadding = padding,
         properties = MapProperties(
-            isBuildingEnabled = true,
+            // flat dark blocks at night (the RiderDeck look), 3D buildings by day
+            isBuildingEnabled = !dark,
             isTrafficEnabled = false,
             isMyLocationEnabled = false,
             mapStyleOptions = if (dark) night else day,
