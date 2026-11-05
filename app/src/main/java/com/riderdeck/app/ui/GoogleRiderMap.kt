@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -223,7 +224,7 @@ fun GoogleRiderMap(
     val coreW = with(density) { (if (dark) 7.dp else 9.dp).toPx() }
     val shineW = with(density) { 2.dp.toPx() }
     val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "pulse")
-    val ring by pulse.animateFloat(
+    val ring: Float by pulse.animateFloat(
         0f, 1f,
         androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1600, easing = androidx.compose.animation.core.LinearEasing)),
         label = "ring",
