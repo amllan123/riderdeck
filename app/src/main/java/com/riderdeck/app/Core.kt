@@ -16,15 +16,77 @@ class RiderApp : Application() {
             private set
         lateinit var ctx: Context
             private set
+        /** GPS, lean and crash sensors. Lives with the app (not the screen) so rides keep recording in the background. */
+        lateinit var tracker: RideTracker
+            private set
         /** Lite edition has no notification access (installs where Play Protect blocks it). */
         val isLite: Boolean get() = BuildConfig.FLAVOR == "lite"
     }
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         ctx = applicationContext
         prefs = Prefs(this)
         org.maplibre.android.MapLibre.getInstance(this)
+        Speaker.init(this)
+        tracker = RideTracker(this)
+        tracker.onCrashSuspected = {
+            if (prefs.s.value.crashDetection) CrashAlert.start()
+        }
+        Recorder.init()
+        RideLoop.start()
+    }
+}
+
+/** Saves the last crash so it can be shared from More → Crash report. */
+object CrashLog {
+    private lateinit var file: java.io.File
+
+    fun install(app: Application) {
+        file = java.io.File(app.filesDir, "last_crash.txt")
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                file.writeText(
+                    "RiderDeck ${BuildConfig.VERSION_NAME} (${BuildConfig.FLAVOR}) · Android ${android.os.Build.VERSION.RELEASE} · " +
+                        "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n${java.util.Date()}\nThread: ${t.name}\n\n" +
+                        android.util.Log.getStackTraceString(e)
+                )
+            } catch (_: Throwable) {
+            }
+            prev?.uncaughtException(t, e)
+        }
+    }
+
+    fun read(): String? = try {
+        if (file.exists()) file.readText() else null
+    } catch (_: Exception) {
+        null
+    }
+
+    fun at(): Long = if (::file.isInitialized && file.exists()) file.lastModified() else 0L
+
+    fun clear() {
+        try {
+            file.delete()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun share(ctx: Context) {
+        val text = read() ?: return
+        try {
+            ctx.startActivity(
+                android.content.Intent.createChooser(
+                    android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(android.content.Intent.EXTRA_SUBJECT, "RiderDeck crash report")
+                        .putExtra(android.content.Intent.EXTRA_TEXT, text),
+                    "Send crash report",
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (_: Exception) {
+        }
     }
 }
 
@@ -43,6 +105,9 @@ data class RideState(
     val lon: Double = 0.0,
     val bearing: Float = 0f,
     val fuelKm: Float = 0f,
+    /** When this GPS fix arrived (SystemClock.elapsedRealtime), for smooth map motion between fixes. */
+    val fixAt: Long = 0L,
+    val accuracyM: Float = 0f,
 ) {
     val avgKmh: Float get() = if (movingSecs > 10) (tripKm / (movingSecs / 3600.0)).toFloat() else 0f
 }
@@ -144,6 +209,13 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("onboarded", false)
         set(v) {
             sp.edit().putBoolean("onboarded", v).apply()
+        }
+
+    /** Time of the crash report the rider was last told about. */
+    var crashSeenAt: Long
+        get() = sp.getLong("crashSeenAt", 0L)
+        set(v) {
+            sp.edit().putLong("crashSeenAt", v).apply()
         }
 
     /* ---- odometer, service, records, parking, documents ---- */

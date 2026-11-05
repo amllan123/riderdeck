@@ -20,6 +20,8 @@ android {
         versionName = "0.1.$buildNumber"
         manifestPlaceholders["MAPS_API_KEY"] = mapsKey
         buildConfigField("boolean", "HAS_MAPS_KEY", mapsKey.isNotBlank().toString())
+        // Same key, for Google place search (it is already inside the app via the manifest).
+        buildConfigField("String", "MAPS_KEY", "\"${mapsKey.filter { it.isLetterOrDigit() || it == '-' || it == '_' }}\"")
         // The map engine ships native code; keep only what phones like the iQOO 7 use.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

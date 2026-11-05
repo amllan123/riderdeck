@@ -16,8 +16,10 @@ data class WeatherState(
     val code: Int = -1,
     val windKmh: Float = 0f,
     val isDay: Boolean = true,
-    /** Minutes until rain starts in the next 2 hours, 0 = raining now, null = dry. */
+    /** Minutes until rain is likely in the next 2 hours, 0 = raining now, null = dry. */
     val rainInMin: Int? = null,
+    /** Chance of that rain (0–100) from the forecast. */
+    val rainChance: Int = 0,
     /** Today's sunrise and sunset (epoch ms), 0 when unknown. */
     val sunriseMs: Long = 0L,
     val sunsetMs: Long = 0L,
@@ -52,9 +54,9 @@ object Weather {
             }
             state.value = w
             val rain = w.rainInMin
-            if (rain != null && rain <= 45 && !rainWarned) {
+            if (rain != null && rain <= 45 && w.rainChance >= 60 && !rainWarned) {
                 rainWarned = true
-                val msg = if (rain == 0) "It's raining around you. Ride carefully." else "Rain expected in about $rain minutes."
+                val msg = if (rain == 0) "It's raining around you. Ride carefully." else "Rain likely in about $rain minutes."
                 Speaker.say(msg)
                 Hub.toast(msg)
             } else if (rain == null) {
@@ -63,26 +65,53 @@ object Weather {
         }
     }
 
+    /** For the self-test. */
+    fun fetchNow(lat: Double, lon: Double): WeatherState? = fetch(lat, lon)
+
+    /**
+     * Forecast models often say "drizzle" when it's dry, so "raining" needs rain actually measured in the last
+     * 15 minutes, and "rain soon" needs a real amount (not a trace) plus a decent chance in the hourly forecast.
+     */
     private fun fetch(lat: Double, lon: Double): WeatherState? = try {
         val url = String.format(
             Locale.ROOT,
             "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f" +
-                "&current=temperature_2m,weather_code,wind_speed_10m,is_day" +
-                "&minutely_15=precipitation&forecast_minutely_15=8&daily=sunrise,sunset&forecast_days=1&timezone=auto",
+                "&current=temperature_2m,weather_code,wind_speed_10m,is_day,precipitation,rain,showers,cloud_cover" +
+                "&minutely_15=precipitation&forecast_minutely_15=8" +
+                "&hourly=precipitation_probability&forecast_hours=3" +
+                "&daily=sunrise,sunset&forecast_days=1&timezone=auto",
             lat, lon,
         )
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 8000
         c.readTimeout = 8000
-        c.setRequestProperty("User-Agent", "RiderDeck/0.1")
+        c.setRequestProperty("User-Agent", "RiderDeck/0.2")
         val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
         val cur = o.getJSONObject("current")
+        val probs = o.optJSONObject("hourly")?.optJSONArray("precipitation_probability")
+        fun chanceAt(minutes: Int): Int {
+            if (probs == null || probs.length() == 0) return 0
+            val i = (minutes / 60).coerceIn(0, probs.length() - 1)
+            return maxOf(probs.optInt(i, 0), if (i + 1 < probs.length() && minutes % 60 >= 30) probs.optInt(i + 1, 0) else 0)
+        }
+        val wetNow = cur.optDouble("precipitation", 0.0) >= 0.2 ||
+            cur.optDouble("rain", 0.0) + cur.optDouble("showers", 0.0) >= 0.2
+        var code = cur.optInt("weather_code", -1)
+        val rainyCode = code in 51..67 || code in 80..82 || code in 95..99
+        if (rainyCode && !wetNow) {
+            // the model's "drizzle" with nothing falling → describe the sky instead
+            code = if (cur.optInt("cloud_cover", 100) >= 60) 3 else 2
+        }
+        var rainIn: Int? = if (wetNow && rainyCode) 0 else null
+        var chance = if (rainIn == 0) 100 else 0
         val rainArr = o.optJSONObject("minutely_15")?.optJSONArray("precipitation")
-        var rainIn: Int? = null
-        if (rainArr != null) {
+        if (rainIn == null && rainArr != null) {
             for (i in 0 until rainArr.length()) {
-                if (rainArr.optDouble(i, 0.0) >= 0.1) {
+                val mm = rainArr.optDouble(i, 0.0)
+                val p = chanceAt(i * 15)
+                if (mm >= 0.4 && p >= 45) {
                     rainIn = i * 15
+                    chance = p
                     break
                 }
             }
@@ -96,14 +125,13 @@ object Weather {
         val daily = o.optJSONObject("daily")
         val sunrise = epoch(daily?.optJSONArray("sunrise")?.optString(0))
         val sunset = epoch(daily?.optJSONArray("sunset")?.optString(0))
-        val code = cur.optInt("weather_code", -1)
-        if (code in 51..67 || code in 80..82 || code in 95..99) rainIn = 0
         WeatherState(
             tempC = cur.optDouble("temperature_2m").toFloat(),
             code = code,
             windKmh = cur.optDouble("wind_speed_10m", 0.0).toFloat(),
             isDay = cur.optInt("is_day", 1) == 1,
             rainInMin = rainIn,
+            rainChance = chance,
             sunriseMs = sunrise,
             sunsetMs = sunset,
         )
@@ -139,7 +167,7 @@ object Weather {
         val rain = when (val r = w.rainInMin) {
             null -> "No rain expected in the next two hours."
             0 -> "It's raining now."
-            else -> "Rain expected in about $r minutes."
+            else -> "${w.rainChance} percent chance of rain in about $r minutes."
         }
         return "${t.toInt()} degrees, ${describe(w.code).lowercase(Locale.ROOT)}. $rain"
     }

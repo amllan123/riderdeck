@@ -11,7 +11,8 @@ import android.hardware.SensorManager
 import android.location.Location
 import android.os.Looper
 import android.os.SystemClock
-import android.view.WindowManager
+import android.hardware.display.DisplayManager
+import android.view.Display
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -31,8 +32,10 @@ import kotlin.math.sqrt
 class RideTracker(private val ctx: Context) : SensorEventListener {
     private val fused = LocationServices.getFusedLocationProviderClient(ctx)
     private val sensors = ctx.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val displays = ctx.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
     private var last: Location? = null
-    private var running = false
+    var running = false
+        private set
 
     private var leanZero = 0f
     // Zero lean = phone upright on screen. "Set lean to zero" re-takes it from the current angle.
@@ -94,21 +97,30 @@ class RideTracker(private val ctx: Context) : SensorEventListener {
         Hub.ride.update { it.copy(tripKm = 0.0, movingSecs = 0.0, topKmh = 0f, maxLeanDeg = 0f) }
     }
 
+    /** Simulated rides (tests) go through exactly the same path as real GPS. */
+    fun feed(l: Location) = onLocation(l)
+
     private fun onLocation(l: Location) {
         val kmh = if (l.hasSpeed()) l.speed * 3.6f else 0f
-        val shown = if (kmh < 2f) 0f else kmh
+        // Very rough fixes (indoors, under flyovers) show 0 rather than a made-up speed.
+        val shown = if (kmh < 2f || l.accuracy > 40f) 0f else kmh
         val prev = last
         var addKm = 0.0
         var addSecs = 0.0
         if (prev != null && l.accuracy < 25f) {
             val meters = prev.distanceTo(l)
             val dt = (l.elapsedRealtimeNanos - prev.elapsedRealtimeNanos) / 1e9
-            if (kmh > 3f && meters < 200f && dt > 0) {
+            // Count the distance even after a gap in fixes (tunnel, phone busy), as long as it's a speed a bike can do.
+            if (dt > 0 && meters / dt < 45.0 && (kmh > 3f || (dt > 5 && meters / dt > 1.5))) {
                 addKm = meters / 1000.0
                 addSecs = dt
             }
         }
         if (prev == null || l.accuracy < 25f) last = l
+        // Keep the map steady: ignore a wild fix if we had a good one moments ago.
+        val prevGood = Hub.ride.value
+        val keepOld = prevGood.hasFix && l.accuracy > 50f && prevGood.accuracyM < 30f &&
+            SystemClock.elapsedRealtime() - prevGood.fixAt < 15_000
         if (addKm > 0) RiderApp.prefs.kmSinceFill = RiderApp.prefs.kmSinceFill + addKm.toFloat()
         Hub.ride.update {
             it.copy(
@@ -118,10 +130,12 @@ class RideTracker(private val ctx: Context) : SensorEventListener {
                 movingSecs = it.movingSecs + addSecs,
                 topKmh = max(it.topKmh, shown),
                 altitudeM = l.altitude,
-                lat = l.latitude,
-                lon = l.longitude,
-                bearing = if (l.hasBearing()) l.bearing else it.bearing,
+                lat = if (keepOld) it.lat else l.latitude,
+                lon = if (keepOld) it.lon else l.longitude,
+                bearing = if (l.hasBearing() && shown >= 6f) l.bearing else it.bearing,
                 fuelKm = it.fuelKm + addKm.toFloat(),
+                fixAt = if (keepOld) it.fixAt else SystemClock.elapsedRealtime(),
+                accuracyM = if (keepOld) it.accuracyM else l.accuracy,
             )
         }
     }
@@ -135,9 +149,8 @@ class RideTracker(private val ctx: Context) : SensorEventListener {
                 val gx = e.values[0]
                 val gy = e.values[1]
                 val inPlane = sqrt(gx * gx + gy * gy)
-                @Suppress("DEPRECATION")
                 val rot = try {
-                    (ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
+                    displays.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: 0
                 } catch (_: Exception) {
                     0
                 }

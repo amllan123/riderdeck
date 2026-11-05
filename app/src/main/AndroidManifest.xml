@@ -10,6 +10,11 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- keeps the ride tracked while you're in Google Maps or the screen is off -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <queries>
         <package android:name="com.google.android.apps.youtube.music" />
@@ -44,7 +49,25 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Google Maps → Share → RiderDeck -->
+            <intent-filter android:label="Ride there (RiderDeck)">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- geo: links ("Open with RiderDeck") -->
+            <intent-filter android:label="Ride there (RiderDeck)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="geo" />
+            </intent-filter>
         </activity>
+
+        <service
+            android:name=".RideService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <service
             android:name=".RiderNotificationListener"

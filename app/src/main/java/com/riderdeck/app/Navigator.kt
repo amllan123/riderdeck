@@ -7,8 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -23,6 +25,7 @@ data class LL(val lat: Double, val lon: Double)
 /** One instruction on the route. [type] uses Valhalla's maneuver numbers (10 = right, 15 = left, 4 = arrive…). */
 data class Maneuver(val type: Int, val instruction: String, val verbal: String, val begin: Int)
 
+@androidx.compose.runtime.Immutable
 class Route(
     val points: List<LL>,
     val cum: DoubleArray, // metres from the start to each point
@@ -32,6 +35,7 @@ class Route(
     val dest: Pin,
 )
 
+@androidx.compose.runtime.Immutable
 data class RouteUi(
     val loading: Boolean = false,
     val route: Route? = null,
@@ -59,19 +63,20 @@ object Navigator {
     private var lastLon = 0.0
     private val spoken = HashSet<String>()
 
-    /** Plan a route to [dest] and show it on the map. */
+    /** Plan a route to [dest] and show it on the map (waits a little for GPS if there's no fix yet). */
     fun preview(dest: Pin, autoStart: Boolean = false) {
         job?.cancel()
         Hub.pin.value = dest
-        val r = Hub.ride.value
-        if (!r.hasFix) {
-            state.value = RouteUi()
-            Hub.toast("Waiting for GPS before planning the route")
-            return
-        }
         val wasNavigating = state.value.navigating
         state.value = state.value.copy(loading = true)
         job = scope.launch {
+            val r = Hub.ride.value.takeIf { it.hasFix }
+                ?: withTimeoutOrNull(25_000) { Hub.ride.first { it.hasFix } }
+            if (r == null) {
+                state.value = RouteUi()
+                Hub.toast("No GPS yet. Tap Route on the pin once GPS is ready")
+                return@launch
+            }
             val route = withContext(Dispatchers.IO) { Routing.route(r.lat, r.lon, dest) }
             if (route == null) {
                 state.value = RouteUi()
@@ -95,9 +100,10 @@ object Navigator {
     /** Find [query] (an address, "home", a shop name…) and plan a route to the best match. */
     fun previewQuery(ctx: Context, query: String, autoStart: Boolean) {
         if (query.isBlank()) return
+        job?.cancel()
         state.value = state.value.copy(loading = true)
-        scope.launch {
-            val hit = PlaceSearch.find(ctx, query).firstOrNull()
+        job = scope.launch {
+            val hit = PlaceSearch.find(ctx, query).firstOrNull()?.let { PlaceSearch.resolve(ctx, it) }
             if (hit == null) {
                 state.value = state.value.copy(loading = false)
                 Hub.toast("Couldn't find “$query”")
@@ -106,6 +112,39 @@ object Navigator {
             }
             preview(Pin(hit.lat, hit.lon, hit.title), autoStart)
         }
+    }
+
+    /** A picked search result: get its exact spot (Google results need one lookup), then plan the route. */
+    fun previewPlace(ctx: Context, place: Place, autoStart: Boolean = false) {
+        job?.cancel()
+        state.value = state.value.copy(loading = true)
+        job = scope.launch {
+            val p = PlaceSearch.resolve(ctx, place)
+            if (p == null) {
+                state.value = state.value.copy(loading = false)
+                Hub.toast("Couldn't open that place. Check your internet")
+                return@launch
+            }
+            preview(Pin(p.lat, p.lon, p.title), autoStart)
+        }
+    }
+
+    /** Show a picked search result on the map without planning a route. */
+    fun showPlace(ctx: Context, place: Place) {
+        scope.launch {
+            val p = PlaceSearch.resolve(ctx, place)
+            if (p == null) {
+                Hub.toast("Couldn't open that place. Check your internet")
+                return@launch
+            }
+            Hub.pin.value = Pin(p.lat, p.lon, p.title)
+        }
+    }
+
+    /** A spinner on the route card while something else (a shared link) is being looked up. */
+    fun busy(on: Boolean) {
+        if (on) state.value = state.value.copy(loading = true)
+        else if (state.value.route == null) state.value = state.value.copy(loading = false)
     }
 
     fun start(announce: Boolean = true) {
@@ -173,6 +212,7 @@ object Navigator {
         if (toDest < 35 || remaining < 25) {
             Speaker.guide("You have arrived at ${r.dest.title}")
             Hub.toast("You've arrived")
+            Recorder.onArrived()
             stop()
             return
         }

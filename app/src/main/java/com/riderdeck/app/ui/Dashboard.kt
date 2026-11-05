@@ -319,6 +319,9 @@ fun SpeedPanel(ride: RideState, s: RiderSettings, compact: Boolean, open: (Strin
     val p = LocalPal.current
     val over = ride.speedKmh > s.alertSpeed + 2
     val range = RiderApp.prefs.rangeKm(ride.fuelKm)
+    val live by com.riderdeck.app.Recorder.live.collectAsState()
+    val now = rememberNow(live.active)
+    val rideSecs = live.rideSecs(now)
     Column(
         modifier.panel().pressable { open("ride") }.padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -346,18 +349,18 @@ fun SpeedPanel(ride: RideState, s: RiderSettings, compact: Boolean, open: (Strin
         }
         if (compact) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                MiniStat("%.1f".format(ride.tripKm), "km")
-                MiniStat(duration(ride.movingSecs), "time")
+                MiniStat("%.1f".format(live.km), "km")
+                MiniStat(duration(rideSecs), "ride time")
                 MiniStat("$range", "km left", if (range < 25) p.warn else p.fg)
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Stat("%.1f".format(ride.tripKm), "Trip km", Modifier.weight(1f))
-                    Stat(duration(ride.movingSecs), "Time", Modifier.weight(1f))
+                    Stat("%.1f".format(live.km), if (live.active || live.startAt == 0L) "Ride km" else "Last ride km", Modifier.weight(1f))
+                    Stat(duration(rideSecs), "Ride time", Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Stat("${ride.avgKmh.roundToInt()}", "Avg km/h", Modifier.weight(1f))
+                    Stat("${live.avgKmh(now).roundToInt()}", "Avg km/h", Modifier.weight(1f))
                     Stat("$range", "Range km", Modifier.weight(1f), if (range < 25) p.warn else p.fg)
                 }
             }
@@ -403,6 +406,20 @@ private fun MiniStat(value: String, label: String, color: Color = LocalPal.curre
         Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = color, maxLines = 1)
         Text(label, fontSize = 11.sp, color = p.muted, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(bottom = 1.dp))
     }
+}
+
+/** The clock, ticking every second while [ticking] (for the ride timer). */
+@Composable
+fun rememberNow(ticking: Boolean): Long {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(ticking) {
+        now = System.currentTimeMillis()
+        while (ticking) {
+            delay(1000)
+            now = System.currentTimeMillis()
+        }
+    }
+    return now
 }
 
 fun duration(secs: Double): String {
@@ -725,7 +742,7 @@ fun InfoPanel(ride: RideState, dev: DeviceState, compact: Boolean, modifier: Mod
         w.tempC == null -> "Checking…"
         rain == null -> "Dry 2 hrs"
         rain == 0 -> "Raining"
-        else -> "Rain in ~$rain min"
+        else -> "${w.rainChance}% rain in ~$rain min"
     }
     val weather: @Composable (Modifier) -> Unit = { m ->
         Column(m.pressable { Speaker.say(Weather.spoken()) }, verticalArrangement = Arrangement.spacedBy(3.dp)) {

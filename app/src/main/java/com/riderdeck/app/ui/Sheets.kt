@@ -41,6 +41,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Call
@@ -188,15 +191,18 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
     val locked = s.rideLock && ride.speedKmh > 10f
     val focus = remember { FocusRequester() }
 
+    val google by PlaceSearch.google.collectAsState()
+
     LaunchedEffect(Unit) {
+        PlaceSearch.newSession()
         if (!locked) try { focus.requestFocus() } catch (_: Exception) { }
     }
     LaunchedEffect(q) {
         val text = q.trim()
-        if (text.length < 3) {
+        if (text.length < 2) {
             results = emptyList(); searched = ""; return@LaunchedEffect
         }
-        delay(450)
+        delay(320)
         busy = true
         results = PlaceSearch.find(ctx, text)
         searched = text
@@ -208,8 +214,13 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
         Navigator.previewQuery(ctx, place, autoStart = false)
     }
     fun show(pl: Place) {
-        Hub.pin.value = Pin(pl.lat, pl.lon, pl.title)
         close()
+        Navigator.showPlace(ctx, pl)
+    }
+    fun inGoogleMaps(what: String) {
+        close()
+        Nav.searchNearby(act, what)
+        Hub.toast("Found it? Tap Share → RiderDeck to ride it here")
     }
 
     SheetHeader("Search", if (locked) "Typing is locked while you're moving. Say it or pick a saved place" else "Find any place, show it on the map or start a route")
@@ -228,7 +239,7 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = {
                 val first = results.firstOrNull()
-                if (first != null) show(first) else if (q.isNotBlank()) Nav.searchNearby(act, q.trim())
+                if (first != null) show(first) else if (q.isNotBlank() && !busy) inGoogleMaps(q.trim())
             }),
             shape = RoundedCornerShape(16.dp), colors = riderFieldColors(),
             modifier = Modifier.weight(1f).focusRequester(focus),
@@ -237,19 +248,31 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
     }
 
     when {
-        busy -> Text("Searching…", fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp, start = 4.dp))
+        busy && results.isEmpty() -> Text("Searching…", fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp, start = 4.dp))
         results.isNotEmpty() -> {
-            SectionTitle("Results")
+            SectionTitle(if (google == PlaceSearch.Google.OK) "Results · Google" else "Results")
             Group {
-                results.forEach { pl -> ResultRow(pl, onShow = { show(pl) }, onGo = { close(); Navigator.preview(Pin(pl.lat, pl.lon, pl.title)) }) }
+                results.forEach { pl ->
+                    ResultRow(pl, onShow = { show(pl) }, onGo = { close(); Navigator.previewPlace(ctx, pl) })
+                }
             }
         }
         searched.isNotEmpty() -> {
             Text("No matches for “$searched”.", fontSize = 14.sp, color = p.muted, modifier = Modifier.padding(top = 14.dp, start = 4.dp))
-            PillButton("Search “$searched” in Google Maps", Modifier.fillMaxWidth().padding(top = 8.dp), primary = false, icon = Icons.Rounded.Search) {
-                close(); Nav.searchNearby(act, searched)
+            PillButton("Find “$searched” in Google Maps", Modifier.fillMaxWidth().padding(top = 8.dp), primary = false, icon = Icons.Rounded.Search) {
+                inGoogleMaps(searched)
             }
+            Text(
+                "Then tap Share → RiderDeck in Google Maps and the route opens here.",
+                fontSize = 12.5.sp, color = p.muted, modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+            )
         }
+    }
+    if (google == PlaceSearch.Google.OFF && q.isNotBlank()) {
+        Text(
+            "Google search is off for your Maps key, so these come from OpenStreetMap. Turn on “Places API (New)” for the key to get Google Maps results here.",
+            fontSize = 12.sp, color = p.warn, lineHeight = 16.sp, modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+        )
     }
 
     if (q.isBlank()) {
@@ -442,6 +465,11 @@ private fun MoreSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
             close()
             act.startCrashCountdown()
         }
+        if (com.riderdeck.app.CrashLog.at() > 0L) {
+            Tile(Icons.Rounded.BugReport, p.bad, "Crash report", "RiderDeck closed unexpectedly. Send this so it can be fixed") {
+                com.riderdeck.app.CrashLog.share(act)
+            }
+        }
     }
 }
 
@@ -596,7 +624,28 @@ private data class PermItem(
     val why: String,
     val perms: List<String>,
     val special: Boolean = false,
+    val check: ((android.content.Context) -> Boolean)? = null,
+    val open: ((android.content.Context) -> Unit)? = null,
 )
+
+private fun ignoresBatterySaver(ctx: android.content.Context): Boolean =
+    ctx.getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(ctx.packageName) == true
+
+@android.annotation.SuppressLint("BatteryLife")
+private fun askBatterySaver(ctx: android.content.Context) {
+    try {
+        ctx.startActivity(
+            android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(android.net.Uri.parse("package:" + ctx.packageName))
+        )
+    } catch (_: Exception) {
+        try {
+            ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (_: Exception) {
+            Hub.toast("Settings → Battery → RiderDeck → allow background use")
+        }
+    }
+}
 
 @Composable
 fun PermissionList(act: MainActivity) {
@@ -616,6 +665,10 @@ fun PermissionList(act: MainActivity) {
     val items = listOf(
         PermItem(Icons.Rounded.Place, "Location", "Speed, trip, map and your SOS location",
             listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)),
+        PermItem(Icons.Rounded.BatteryChargingFull, "Keep running in the background", "So the battery saver doesn't stop ride tracking while you're in Google Maps",
+            emptyList(), check = ::ignoresBatterySaver, open = ::askBatterySaver),
+        PermItem(Icons.Rounded.NotificationsActive, "Ride notification", "Shows RiderDeck is still tracking, with an End ride button",
+            listOf(Manifest.permission.POST_NOTIFICATIONS)).takeIf { android.os.Build.VERSION.SDK_INT >= 33 },
         PermItem(Icons.Rounded.Notifications, "Notification access", "Music controls, Google Maps turns, calls and reading messages", emptyList(), special = true)
             .takeUnless { RiderApp.isLite },
         PermItem(Icons.Rounded.Phone, "Phone", "Answer and decline calls with big buttons",
@@ -626,11 +679,16 @@ fun PermissionList(act: MainActivity) {
     Group {
         items.filterNotNull().forEach { item ->
             val granted = remember(tick) {
-                if (item.special) Perms.listener(ctx) else item.perms.all { Perms.has(ctx, it) }
+                item.check?.invoke(ctx) ?: if (item.special) Perms.listener(ctx) else item.perms.all { Perms.has(ctx, it) }
             }
             Row(
                 Modifier.fillMaxWidth().clickable(enabled = !granted) {
-                    if (item.special) Perms.openListenerSettings(ctx) else launcher.launch(item.perms.toTypedArray())
+                    val open = item.open
+                    when {
+                        open != null -> open(ctx)
+                        item.special -> Perms.openListenerSettings(ctx)
+                        else -> launcher.launch(item.perms.toTypedArray())
+                    }
                 }.padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

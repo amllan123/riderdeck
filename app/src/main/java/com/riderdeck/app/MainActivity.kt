@@ -41,15 +41,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    lateinit var tracker: RideTracker
-        private set
-    private var crashJob: Job? = null
+    companion object {
+        /** RiderDeck is on screen (the ride service keeps running in the background either way). */
+        @Volatile
+        var visible = false
+            private set
+    }
+
+    val tracker: RideTracker get() = RiderApp.tracker
     private var recognizer: SpeechRecognizer? = null
-    private var dimmed = false
-    private var overSpeed = false
-    private var lowFuelWarned = false
     private var telephonyCallback: Any? = null
-    private val beeper by lazy { try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) } catch (_: Exception) { null } }
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -74,13 +75,9 @@ class MainActivity : ComponentActivity() {
         }
 
         Speaker.init(this)
-        tracker = RideTracker(this)
-        tracker.onCrashSuspected = {
-            if (RiderApp.prefs.s.value.crashDetection) startCrashCountdown()
-        }
-
         Demo.apply(intent)
-        if (!Demo.active) Recorder.init()
+        Sim.apply(this, intent)
+        if (!Demo.active && savedInstanceState == null) SharedPlace.handle(this, intent)
         setContent {
             val s by RiderApp.prefs.s.collectAsState()
             val w by Weather.state.collectAsState()
@@ -106,36 +103,22 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             delay(5_000)
             if (Demo.active) return@launch
+            val crashAt = CrashLog.at()
+            if (crashAt > 0 && crashAt != RiderApp.prefs.crashSeenAt) {
+                RiderApp.prefs.crashSeenAt = crashAt
+                Hub.toast("RiderDeck closed unexpectedly last time. More → Crash report to send it")
+                delay(5_000)
+            }
             Docs.remindIfExpiring()
             delay(4_000)
             Service.remindIfDue()
         }
-        lifecycleScope.launch {
-            Hub.ride.collect { r ->
-                Navigator.onFix(r)
-                if (!Demo.active) {
-                    Weather.maybeRefresh(r)
-                    Recorder.onRide(r)
-                }
-                val s = RiderApp.prefs.s.value
-                // over-speed beep, once per crossing
-                if (s.speedBeep && r.speedKmh > s.alertSpeed + 2 && !overSpeed) {
-                    overSpeed = true
-                    beeper?.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
-                } else if (r.speedKmh < s.alertSpeed - 3) {
-                    overSpeed = false
-                }
-                // low fuel, once per fill-up
-                val range = RiderApp.prefs.rangeKm(r.fuelKm)
-                if (range < 25 && !lowFuelWarned) {
-                    lowFuelWarned = true
-                    Speaker.say("Low fuel. About $range kilometres left.")
-                    Hub.toast("Low fuel · about $range km left")
-                } else if (range >= 25) {
-                    lowFuelWarned = false
-                }
-            }
-        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (!Demo.active) SharedPlace.handle(this, intent)
     }
 
     private var brightSince = 0L
@@ -167,6 +150,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        visible = true
         val sm = getSystemService(android.hardware.SensorManager::class.java)
         sm?.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT)?.let {
             Hub.hasLightSensor = true
@@ -180,6 +164,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        visible = false
         getSystemService(android.hardware.SensorManager::class.java)?.unregisterListener(lightListener)
         try {
             unregisterReceiver(batteryReceiver)
@@ -188,7 +173,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        tracker.stop()
+        // the ride service keeps GPS on in the background; without it, stop here
+        if (!RideService.running) tracker.stop()
         stopCallMonitor()
         recognizer?.destroy()
         super.onDestroy()
@@ -196,8 +182,8 @@ class MainActivity : ComponentActivity() {
 
     /** Called on start and again after the user grants permissions. */
     fun startTracking() {
-        if (Demo.active) return
-        tracker.start()
+        if (Demo.active || Sim.active) return
+        RideService.start(this)
         startCallMonitor()
     }
 
@@ -208,40 +194,11 @@ class MainActivity : ComponentActivity() {
 
     /* ---------------- crash & SOS ---------------- */
 
-    fun startCrashCountdown() {
-        if (crashJob?.isActive == true) return
-        crashJob = lifecycleScope.launch {
-            Speaker.say("Crash detected. Sending S O S in fifteen seconds. Tap I'm OK to cancel.")
-            for (i in 15 downTo 1) {
-                Hub.crashCountdown.value = i
-                vibrate(300)
-                delay(1000)
-            }
-            Hub.crashCountdown.value = null
-            Sos.send(this@MainActivity, "Possible crash detected")
-        }
-    }
+    fun startCrashCountdown() = CrashAlert.start()
 
-    fun cancelCrash() {
-        crashJob?.cancel()
-        Hub.crashCountdown.value = null
-        Speaker.stop()
-        Hub.toast("Alert cancelled. Ride safe")
-    }
+    fun cancelCrash() = CrashAlert.cancel()
 
-    fun sendSosNow() {
-        vibrate(500)
-        Sos.send(this, "Emergency")
-    }
-
-    @Suppress("DEPRECATION")
-    private fun vibrate(ms: Long) {
-        try {
-            val v = getSystemService(Vibrator::class.java) ?: return
-            v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
-        } catch (_: Exception) {
-        }
-    }
+    fun sendSosNow() = CrashAlert.sendNow()
 
     /* ---------------- heat guard ---------------- */
 

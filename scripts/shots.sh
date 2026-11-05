@@ -36,5 +36,24 @@ shot shot-1-landscape 1
 shot shot-2-landscape-sheet 1 --es sheet more
 shot shot-3-portrait 0
 shot shot-4-landscape-light 1 --ez sun true
+# Simulated ride through the real GPS → recorder → navigation → map path, plus a network self-test
+# (Google search, weather, shared links, routing). Logs and frame stats go to the release too.
+adb shell am force-stop $PKG
+adb shell settings put system user_rotation 1
+adb shell wm user-rotation lock 1 || true
+sleep 3
+adb logcat -c
+adb shell am start -W -n $ACT --ez sim true --ez selftest true
+sleep 2
+adb shell dumpsys gfxinfo $PKG reset > /dev/null
+sleep 26
+adb exec-out screencap -p > "$OUT/shot-5-sim-riding.png"
+sleep 22
+adb exec-out screencap -p > "$OUT/shot-6-sim-traffic-stop.png"
+sleep 35
+adb exec-out screencap -p > "$OUT/shot-7-sim-riding-on.png"
+adb shell dumpsys gfxinfo $PKG > "$OUT/gfxinfo.txt"
+adb logcat -d -v time -s "RiderSim:*" "RiderSelfTest:*" "RiderSearch:*" "RiderShare:*" "RideLoop:*" "RideService:*" "AndroidRuntime:E" > "$OUT/selftest.txt"
+adb logcat -d -v time "*:E" > "$OUT/errors.txt"
 ls -la "$OUT"
 exit 0

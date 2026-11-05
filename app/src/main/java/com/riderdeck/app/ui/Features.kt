@@ -95,7 +95,6 @@ import kotlin.math.roundToInt
 @Composable
 fun RideSheet(act: MainActivity) {
     val p = LocalPal.current
-    val ride by Hub.ride.collectAsState()
     val rides by Rides.list.collectAsState()
     val recording by Recorder.active.collectAsState()
     var selected by remember { mutableStateOf<RideRecord?>(null) }
@@ -109,30 +108,40 @@ fun RideSheet(act: MainActivity) {
         return
     }
     val best = RiderApp.prefs.best060
-    SheetHeader("Rides", if (recording) "Recording this ride · it saves when you stop for 4 minutes" else "Rides record by themselves once you pass 12 km/h")
-    Label("Since you opened RiderDeck")
+    val live by Recorder.live.collectAsState()
+    val now = rememberNow(live.active)
+    SheetHeader(
+        "Rides",
+        if (recording) "Recording · counts signals and traffic too · ends by itself after 15 min parked"
+        else "A ride starts recording by itself when you set off",
+    )
+    Label(if (live.active) "This ride" else if (live.startAt > 0) "Last ride" else "No ride yet")
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Hero("%.1f".format(ride.tripKm), "km", Modifier.weight(1f))
-        Hero(duration(ride.movingSecs), "moving time", Modifier.weight(1f))
-        Hero("${ride.avgKmh.roundToInt()}", "avg km/h", Modifier.weight(1f))
+        Hero("%.1f".format(live.km), "km", Modifier.weight(1f))
+        Hero(duration(live.rideSecs(now)), "ride time", Modifier.weight(1f))
+        Hero("${live.avgKmh(now).roundToInt()}", "avg km/h", Modifier.weight(1f))
     }
     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Hero("${ride.topKmh.roundToInt()}", "top km/h", Modifier.weight(1f))
-        Hero("${ride.maxLeanDeg.roundToInt()}°", "max lean", Modifier.weight(1f))
+        Hero(duration(live.movingSecs), "moving", Modifier.weight(1f))
+        Hero(duration(live.stoppedSecs(now)), "stopped", Modifier.weight(1f))
+        Hero("${live.topKmh.roundToInt()}", "top km/h", Modifier.weight(1f))
+    }
+    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Hero("${live.maxLean.roundToInt()}°", "max lean", Modifier.weight(1f))
+        Hero("${live.movingAvgKmh.roundToInt()}", "moving avg", Modifier.weight(1f))
         Hero(if (best > 0f) "%.1fs".format(best) else "--", "best 0–60", Modifier.weight(1f), p.pop.takeIf { best > 0f } ?: p.fg)
     }
     Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Odometer %,.0f km".format(RiderApp.prefs.odoKm), color = p.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        PopButton("Reset trip", kind = PopKind.Secondary, height = 40.dp) {
-            act.tracker.resetTrip()
-            Hub.toast("Trip reset")
+        if (recording) {
+            PopButton("End ride", kind = PopKind.Danger, height = 40.dp) { Recorder.endNow() }
         }
     }
     SectionTitle("Past rides")
     if (rides.isEmpty()) {
         Text(
-            "No saved rides yet. Ride above 12 km/h and each ride shows up here with its route, speed and lean.",
+            "No saved rides yet. Just ride: each ride shows up here with its route, time, speed and lean.",
             color = p.muted, fontSize = 14.sp, lineHeight = 20.sp,
         )
     }
@@ -144,7 +153,7 @@ fun RideSheet(act: MainActivity) {
                     Column(Modifier.weight(1f)) {
                         Text(rideDate(r.start), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1)
                         Text(
-                            "%.1f km · %s · top %d".format(r.km, durationWords(r.movingSecs), r.topKmh.roundToInt()),
+                            "%.1f km · %s · top %d".format(r.km, durationWords(r.rideSecs), r.topKmh.roundToInt()),
                             color = p.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         r.zeroTo60?.let { Text("0–60 in %.1f s".format(it), color = p.pop, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
@@ -165,7 +174,7 @@ private fun RideDetail(r: RideRecord, onBack: () -> Unit, onDelete: () -> Unit) 
         Label("All rides")
     }
     Spacer(Modifier.height(12.dp))
-    SheetHeader(rideDate(r.start), "%.1f km in %s".format(r.km, durationWords(r.movingSecs)))
+    SheetHeader(rideDate(r.start), "%.1f km in %s · %s stopped".format(r.km, durationWords(r.rideSecs), durationWords(r.stoppedSecs)))
     Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(20.dp)).background(p.bg).enter(1)) {
         RouteSketch(r.points, Modifier.fillMaxSize(), stroke = 5f, animate = true)
     }
@@ -180,11 +189,15 @@ private fun RideDetail(r: RideRecord, onBack: () -> Unit, onDelete: () -> Unit) 
     }
     Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Hero("%.1f".format(r.km), "km", Modifier.weight(1f))
-        Hero(duration(r.movingSecs), "moving time", Modifier.weight(1f))
+        Hero(duration(r.rideSecs), "ride time", Modifier.weight(1f))
         Hero("${r.avgKmh.roundToInt()}", "avg km/h", Modifier.weight(1f))
     }
     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Hero(duration(r.movingSecs), "moving", Modifier.weight(1f))
+        Hero("${r.movingAvgKmh.roundToInt()}", "moving avg", Modifier.weight(1f))
         Hero("${r.topKmh.roundToInt()}", "top km/h", Modifier.weight(1f))
+    }
+    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Hero("${r.maxLean.roundToInt()}°", "max lean", Modifier.weight(1f))
         Hero(r.zeroTo60?.let { "%.1fs".format(it) } ?: "--", "0–60", Modifier.weight(1f))
     }

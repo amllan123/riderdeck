@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.ZoomOutMap
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -108,6 +109,15 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
         else -> 0.dp
     }
 
+    // Navigating in Google Maps: RiderDeck only gets the turns, not the road. Say how to bring the route here.
+    val googleOnly = nav.active && ru.route == null && !ru.loading
+    LaunchedEffect(googleOnly) {
+        if (googleOnly && !MapTips.googleTipShown) {
+            MapTips.googleTipShown = true
+            Hub.toast("Route is in Google Maps. To draw it here: Google Maps → the place → Share → RiderDeck")
+        }
+    }
+
     BoxWithConstraints(modifier.panel()) {
         val h = maxHeight
         // While guiding, your arrow sits low on the screen so you see more road ahead (like Google Maps).
@@ -118,7 +128,7 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
             PaddingValues(top = 84.dp, bottom = bottomCard)
         }
         if (BuildConfig.HAS_MAPS_KEY) {
-            GoogleRiderMap(ride, p.dark, pin, follow, ru, pad, overviewKey, Modifier.fillMaxSize())
+            GoogleRiderMap(p.dark, pin, follow, ru, pad, overviewKey, Modifier.fillMaxSize())
         } else {
             RiderMap(ride, p.dark, pin, follow, ru, Modifier.fillMaxSize())
         }
@@ -183,6 +193,10 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
             RouteSheet(ru, act, { overviewKey++ }, Modifier.padding(10.dp).fillMaxWidth())
         }
     }
+}
+
+private object MapTips {
+    var googleTipShown = false
 }
 
 /* ---------------- top ---------------- */
