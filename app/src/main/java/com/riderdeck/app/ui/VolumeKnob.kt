@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -144,7 +145,7 @@ fun VolumeKnob(modifier: Modifier) {
                 drawArc(p.fg.copy(alpha = 0.08f), 135f, 270f, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 if (frac > 0f) {
                     val br = Brush.sweepGradient(0f to p.pop2, 0.75f to p.pop, 1f to p.pop2, center = c)
-                    androidx.compose.ui.graphics.drawscope.rotate(135f, c) {
+                    rotate(135f, c) {
                         drawArc(br, 0f, 270f * frac, false, tl, arcSize, alpha = 0.22f, style = Stroke(stroke * 2.4f, cap = StrokeCap.Round))
                         drawArc(br, 0f, 270f * frac, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                     }
