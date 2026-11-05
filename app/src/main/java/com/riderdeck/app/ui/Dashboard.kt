@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Apps
@@ -135,9 +137,9 @@ fun Dashboard(act: MainActivity) {
     val dev by Hub.device.collectAsState()
     val listener by Hub.listenerConnected.collectAsState()
     val s by RiderApp.prefs.s.collectAsState()
-    var sheet by remember { mutableStateOf<String?>(null) }
+    var sheet by remember { mutableStateOf<String?>(com.riderdeck.app.Demo.sheet) }
     val open: (String) -> Unit = { sheet = it }
-    var intro by remember { mutableStateOf(!Session.introShown) }
+    var intro by remember { mutableStateOf(!Session.introShown && !com.riderdeck.app.Demo.active) }
 
     Box(Modifier.fillMaxSize().background(p.bg)) {
         if (!intro) {
@@ -202,11 +204,13 @@ private fun Intro(done: () -> Unit) {
                 }.shimmer(p.bg),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                Text("RiderDeck", fontFamily = Display, fontWeight = FontWeight.Black, fontSize = 52.sp, color = p.fg)
-                Box(Modifier.padding(start = 4.dp, bottom = 14.dp).size(12.dp).background(p.pop))
+                Text(
+                    "RiderDeck", fontWeight = FontWeight.ExtraBold, fontSize = 50.sp, letterSpacing = (-1.5).sp,
+                    style = androidx.compose.ui.text.TextStyle(brush = Brush.linearGradient(listOf(p.fg, p.pop, p.pop2))),
+                )
             }
-            Box(Modifier.padding(top = 10.dp).width(180.dp).height(3.dp).background(p.glass)) {
-                Box(Modifier.fillMaxHeight().fillMaxWidth(line.value).background(p.pop))
+            Box(Modifier.padding(top = 12.dp).width(180.dp).height(4.dp).clip(RoundedCornerShape(4.dp)).background(p.glass)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(line.value).clip(RoundedCornerShape(4.dp)).background(p.brand()))
             }
             Text(
                 "RIDE  ·  NAVIGATE  ·  STAY SAFE", fontSize = 11.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Bold,
@@ -266,31 +270,28 @@ fun Rail(vertical: Boolean, dev: DeviceState, open: (String) -> Unit, modifier: 
     val p = LocalPal.current
     val g = LocalGlove.current
     if (vertical) {
-        Column(
-            modifier.panel().padding(vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        BoxWithConstraints(modifier.panel()) {
+            val iconH = ((maxHeight - 150.dp) / 5).coerceIn(34.dp, 50.dp * g)
+            Column(Modifier.fillMaxSize().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(clockText(), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
                 Text("${dev.batteryPct}%", fontSize = 11.sp, color = p.muted, fontWeight = FontWeight.SemiBold)
                 if (dev.tempC >= 40f) Text("${dev.tempC.roundToInt()}°", fontSize = 11.sp, color = if (dev.tempC >= 43f) p.bad else p.warn)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(Modifier.weight(1f))
                 railItems.forEach { item ->
                     Box(
-                        Modifier.size(52.dp, (46 * g).dp).pressable { open(item.key) },
+                        Modifier.size(50.dp, iconH).clip(RoundedCornerShape(14.dp)).pressable { open(item.key) },
                         contentAlignment = Alignment.Center,
                     ) { Icon(item.icon, item.label, tint = p.muted) }
                 }
+                Spacer(Modifier.weight(1f))
+                SosButton(50) { open("sos") }
             }
-            SosButton(50) { open("sos") }
         }
     } else {
-        Row(modifier.panel().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier.panel().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             railItems.forEach { item ->
                 Column(
-                    Modifier.weight(1f).fillMaxHeight().pressable { open(item.key) },
+                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(16.dp)).pressable { open(item.key) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -298,7 +299,7 @@ fun Rail(vertical: Boolean, dev: DeviceState, open: (String) -> Unit, modifier: 
                     Text(item.label, fontSize = 11.sp, color = p.muted, fontWeight = FontWeight.SemiBold)
                 }
             }
-            SosButton(52) { open("sos") }
+            SosButton(52)  { open("sos") }
         }
     }
 }
@@ -306,8 +307,8 @@ fun Rail(vertical: Boolean, dev: DeviceState, open: (String) -> Unit, modifier: 
 @Composable
 fun SosButton(sizeDp: Int, onClick: () -> Unit) {
     val g = LocalGlove.current
-    PopSurface(Modifier.size((sizeDp * g).dp), colors = popColors(PopKind.Danger), depth = 4.dp, shimmer = true, onClick = onClick) {
-        Text("SOS", fontWeight = FontWeight.Black, fontSize = 13.sp, letterSpacing = 1.sp)
+    PopSurface(Modifier.size((sizeDp * g).dp), colors = popColors(PopKind.Danger), onClick = onClick, shape = CircleShape) {
+        Text("SOS", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, letterSpacing = 0.5.sp)
     }
 }
 
@@ -398,74 +399,84 @@ fun duration(secs: Double): String {
 fun Stat(value: String, label: String, modifier: Modifier, color: Color = LocalPal.current.fg) {
     val p = LocalPal.current
     Column(
-        modifier.background(p.glass).border(1.dp, p.stroke).padding(vertical = 6.dp),
+        modifier.clip(RoundedCornerShape(14.dp)).background(p.glass).padding(vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = color, maxLines = 1)
-        Text(label.uppercase(), fontSize = 8.5.sp, color = p.muted, letterSpacing = 1.sp, maxLines = 1, fontWeight = FontWeight.Bold)
+        Text(label.uppercase(), fontSize = 8.5.sp, color = p.muted, letterSpacing = 0.8.sp, maxLines = 1, fontWeight = FontWeight.Bold)
     }
 }
 
-/** LED-segment speed ring: segments light up with speed, amber near the limit, red above it. */
+/** Glowing gradient speed arc (cyan → violet → pink), red with a pulse above the limit. */
 @Composable
 fun SpeedRing(kmh: Float, over: Boolean, limit: Int, modifier: Modifier) {
     val p = LocalPal.current
     val anim by animateFloatAsState(kmh, spring(dampingRatio = 0.85f, stiffness = 60f), label = "speed")
     val pulse = rememberInfiniteTransition(label = "pulse")
     val glow by pulse.animateFloat(
-        0.25f, 0.65f, infiniteRepeatable(tween(520, easing = LinearEasing), RepeatMode.Reverse), label = "glow",
+        0.18f, 0.5f, infiniteRepeatable(tween(520, easing = LinearEasing), RepeatMode.Reverse), label = "glow",
     )
+    val hot = Color(0xFFFF4FA3)
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val side = maxWidth
         Canvas(Modifier.fillMaxSize()) {
             val dim = min(size.width, size.height)
+            val stroke = dim * 0.062f
+            val inset = stroke * 1.7f
+            val arcSize = Size(dim - inset * 2, dim - inset * 2)
+            val tl = Offset((size.width - arcSize.width) / 2, (size.height - arcSize.height) / 2)
             val c = Offset(size.width / 2, size.height / 2)
-            val rOuter = dim * 0.47f
-            val rInner = dim * 0.38f
-            val n = 42
+            val r = arcSize.width / 2
             val frac = (anim / 140f).coerceIn(0f, 1f)
             val limitFrac = (limit / 140f).coerceIn(0f, 1f)
-            val segW = (rOuter * Math.toRadians(270.0 / n).toFloat()) * 0.55f
-            // thin outer guide
-            drawArc(
-                p.glass, 135f, 270f, false,
-                topLeft = Offset(c.x - dim * 0.495f, c.y - dim * 0.495f), size = Size(dim * 0.99f, dim * 0.99f),
-                style = Stroke(dim * 0.008f),
-            )
-            for (i in 0 until n) {
-                val f = (i + 0.5f) / n
-                val a = Math.toRadians(135.0 + 270.0 * f)
-                val start = Offset(c.x + rInner * cos(a).toFloat(), c.y + rInner * sin(a).toFloat())
-                val end = Offset(c.x + rOuter * cos(a).toFloat(), c.y + rOuter * sin(a).toFloat())
-                val lit = f <= frac
-                val col = when {
-                    !lit -> p.fg.copy(alpha = 0.07f)
-                    over -> p.bad
-                    f > limitFrac -> p.bad
-                    f > limitFrac * 0.85f -> p.warn
-                    else -> p.pop
-                }
-                if (lit) {
-                    drawLine(col.copy(alpha = if (over) glow * 0.5f else 0.18f), start, end, strokeWidth = segW * 2.2f, cap = StrokeCap.Butt)
-                }
-                drawLine(col, start, end, strokeWidth = segW, cap = StrokeCap.Butt)
+
+            // track
+            drawArc(p.fg.copy(alpha = 0.07f), 135f, 270f, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            // ticks
+            for (v in 0..140 step 10) {
+                val a = Math.toRadians(135.0 + 270.0 * v / 140)
+                val major = v % 20 == 0
+                val r1 = r - stroke * 1.35f
+                val r2 = r - stroke * (if (major) 2.15f else 1.75f)
+                drawLine(
+                    if (major) p.muted.copy(alpha = 0.7f) else p.faint.copy(alpha = 0.6f),
+                    Offset(c.x + r1 * cos(a).toFloat(), c.y + r1 * sin(a).toFloat()),
+                    Offset(c.x + r2 * cos(a).toFloat(), c.y + r2 * sin(a).toFloat()),
+                    strokeWidth = if (major) dim * 0.009f else dim * 0.006f, cap = StrokeCap.Round,
+                )
             }
-            // limit marker
+            // value arc with glow (drawn from 0° after rotating, so the gradient runs along the arc)
+            if (frac > 0.004f) {
+                val brush = if (over) {
+                    Brush.sweepGradient(listOf(p.bad, Color(0xFFFF8A65), p.bad), center = c)
+                } else {
+                    Brush.sweepGradient(0f to p.pop2, 0.4f to p.pop, 0.75f to hot, 1f to p.pop2, center = c)
+                }
+                rotate(135f, c) {
+                    drawArc(brush, 0f, 270f * frac, false, tl, arcSize, alpha = if (over) glow else 0.22f, style = Stroke(stroke * 2.6f, cap = StrokeCap.Round))
+                    drawArc(brush, 0f, 270f * frac, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                }
+                val ta = Math.toRadians(135.0 + 270.0 * frac)
+                val tip = Offset(c.x + r * cos(ta).toFloat(), c.y + r * sin(ta).toFloat())
+                drawCircle(Color.White.copy(alpha = 0.25f), stroke * 1.05f, tip)
+                drawCircle(Color.White, stroke * 0.55f, tip)
+            }
+            // speed limit marker
             val la = Math.toRadians(135.0 + 270.0 * limitFrac)
             drawLine(
                 p.bad,
-                Offset(c.x + (rOuter + dim * 0.02f) * cos(la).toFloat(), c.y + (rOuter + dim * 0.02f) * sin(la).toFloat()),
-                Offset(c.x + (rOuter + dim * 0.05f) * cos(la).toFloat(), c.y + (rOuter + dim * 0.05f) * sin(la).toFloat()),
-                strokeWidth = dim * 0.02f,
+                Offset(c.x + (r + stroke * 0.9f) * cos(la).toFloat(), c.y + (r + stroke * 0.9f) * sin(la).toFloat()),
+                Offset(c.x + (r + stroke * 1.6f) * cos(la).toFloat(), c.y + (r + stroke * 1.6f) * sin(la).toFloat()),
+                strokeWidth = dim * 0.018f, cap = StrokeCap.Round,
             )
         }
         val d = LocalDensity.current
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             RollingNumber(
-                kmh.roundToInt(), fontSize = with(d) { (side * 0.30f).toSp() },
+                kmh.roundToInt(), fontSize = with(d) { (side * 0.29f).toSp() },
                 color = if (over) p.bad else p.fg,
             )
-            Text("KM/H", fontSize = with(d) { (side * 0.055f).toSp() }, color = p.muted, letterSpacing = 3.sp, fontWeight = FontWeight.Bold)
+            Text("km/h", fontSize = with(d) { (side * 0.06f).toSp() }, color = p.muted, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -500,7 +511,7 @@ fun EqBars(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
     }
     Row(modifier.height(12.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
         hs.forEach { h ->
-            Box(Modifier.width(3.dp).fillMaxHeight(if (playing) h.value else 0.2f).background(color))
+            Box(Modifier.width(3.dp).fillMaxHeight(if (playing) h.value else 0.2f).clip(RoundedCornerShape(2.dp)).background(color))
         }
     }
 }
@@ -578,7 +589,7 @@ private fun BasicMusic(compact: Boolean, onHint: () -> Unit) {
     if (compact) {
         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(46.dp).background(p.glass).border(1.dp, p.stroke).pressable(onHint),
+                Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(p.glass).pressable(onHint),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.MusicNote, null, tint = p.muted) }
             Column(Modifier.weight(1f).padding(horizontal = 10.dp).pressable(onHint)) {
@@ -593,7 +604,7 @@ private fun BasicMusic(compact: Boolean, onHint: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Label("Music")
             Row(Modifier.pressable(onHint), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(58.dp).background(p.glass).border(1.dp, p.stroke), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(58.dp).clip(RoundedCornerShape(14.dp)).background(p.glass), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.MusicNote, null, tint = p.muted)
                 }
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
@@ -636,7 +647,7 @@ private fun EmptyMusic(text: String, button: String, compact: Boolean, onClick: 
 private fun Art(m: MediaState, sizeDp: Int, modifier: Modifier) {
     val p = LocalPal.current
     Box(
-        modifier.size(sizeDp.dp).background(p.glass).border(1.dp, p.stroke),
+        modifier.size(sizeDp.dp).clip(RoundedCornerShape(14.dp)).background(p.glass),
         contentAlignment = Alignment.Center,
     ) {
         Crossfade(m.art, animationSpec = tween(500), label = "art") { art ->
@@ -652,14 +663,14 @@ private fun ProgressLine(m: MediaState) {
     val pos = musicPosition(m)
     val target = if (m.durationMs > 0) pos.toFloat() / m.durationMs else 0f
     val frac by animateFloatAsState(target.coerceIn(0f, 1f), tween(500, easing = LinearEasing), label = "prog")
-    Box(Modifier.fillMaxWidth().height(3.dp).background(p.fg.copy(alpha = 0.12f))) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(p.pop))
+    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(4.dp)).background(p.fg.copy(alpha = 0.12f))) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(frac).clip(RoundedCornerShape(4.dp)).background(p.brand()))
     }
 }
 
 @Composable
 fun PlayButton(playing: Boolean, sizeDp: Int) {
-    PopSurface(Modifier.size(sizeDp.dp + 4.dp), colors = popColors(PopKind.Primary), depth = 4.dp, onClick = { Media.toggle() }) {
+    PopSurface(Modifier.size(sizeDp.dp), colors = popColors(PopKind.Primary), onClick = { Media.toggle() }, shape = CircleShape) {
         Crossfade(playing, label = "play") { pl ->
             Icon(if (pl) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (pl) "Pause" else "Play", modifier = Modifier.size(28.dp))
         }
@@ -707,10 +718,10 @@ fun InfoPanel(ride: RideState, dev: DeviceState, compact: Boolean, modifier: Mod
                 Icon(weatherIcon(w.code, w.isDay), null, tint = tint, modifier = Modifier.size(22.dp))
                 Text(
                     w.tempC?.let { "${it.roundToInt()}°" } ?: "--°",
-                    fontFamily = Display, fontSize = 30.sp, fontWeight = FontWeight.Black, lineHeight = 32.sp,
+                    fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 30.sp, maxLines = 1, softWrap = false,
                 )
             }
-            Text(if (w.tempC == null) "Weather" else Weather.describe(w.code), fontSize = 12.5.sp, color = p.muted, maxLines = 1, fontWeight = FontWeight.SemiBold)
+            Text(if (w.tempC == null) "Weather" else Weather.describe(w.code), fontSize = 12.5.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(Icons.Rounded.Umbrella, null, tint = if (rain != null) p.warn else p.ok, modifier = Modifier.size(14.dp))
                 Text(rainText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (rain != null) p.warn else p.ok, maxLines = 2, lineHeight = 14.sp)
@@ -724,7 +735,7 @@ fun InfoPanel(ride: RideState, dev: DeviceState, compact: Boolean, modifier: Mod
                 VolumeKnob(Modifier.weight(1f).fillMaxWidth())
             }
         } else {
-            val knob = minOf(maxHeight, maxWidth * 0.6f)
+            val knob = minOf(maxHeight, maxWidth * 0.56f)
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 weather(Modifier.weight(1f))
                 VolumeKnob(Modifier.size(knob))

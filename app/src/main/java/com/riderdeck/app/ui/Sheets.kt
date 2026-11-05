@@ -94,7 +94,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -135,9 +134,9 @@ fun Sheets(name: String, act: MainActivity, open: (String) -> Unit, close: () ->
         sheetState = state,
         containerColor = p.sheet,
         contentColor = p.fg,
-        shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = {
-            Box(Modifier.padding(top = 10.dp, bottom = 14.dp).size(width = 44.dp, height = 4.dp).background(p.pop))
+            Box(Modifier.padding(top = 10.dp, bottom = 14.dp).size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(4.dp)).background(p.faint))
         },
     ) {
         Column(
@@ -231,7 +230,7 @@ private fun GoToSheet(act: MainActivity, open: (String) -> Unit, close: () -> Un
                 val first = results.firstOrNull()
                 if (first != null) show(first) else if (q.isNotBlank()) Nav.searchNearby(act, q.trim())
             }),
-            shape = RectangleShape, colors = riderFieldColors(),
+            shape = RoundedCornerShape(16.dp), colors = riderFieldColors(),
             modifier = Modifier.weight(1f).focusRequester(focus),
         )
         RoundFab(Icons.Rounded.Mic, "Say a place", true) { close(); act.startVoice() }
@@ -342,7 +341,7 @@ private fun MusicSheet(act: MainActivity) {
     if (m.connected && m.title.isNotBlank()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val art = m.art
-            Box(Modifier.size(72.dp).clip(RectangleShape).background(p.glass), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)).background(p.glass), contentAlignment = Alignment.Center) {
                 if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize()) else Icon(Icons.Rounded.MusicNote, null)
             }
             Column(Modifier.weight(1f).padding(start = 14.dp)) {
@@ -385,7 +384,7 @@ private fun NumberField(label: String, initial: Float, modifier: Modifier, onVal
         },
         label = { Text(label) }, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        shape = RectangleShape, colors = riderFieldColors(), modifier = modifier,
+        shape = RoundedCornerShape(16.dp), colors = riderFieldColors(), modifier = modifier,
     )
 }
 
@@ -418,7 +417,7 @@ private fun FuelSheet() {
 @Composable
 fun Hero(value: String, label: String, modifier: Modifier, color: Color = LocalPal.current.fg) {
     val p = LocalPal.current
-    Column(modifier.background(p.glass).border(1.dp, p.stroke).padding(12.dp)) {
+    Column(modifier.clip(RoundedCornerShape(16.dp)).background(p.glass).padding(12.dp)) {
         Text(value, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1)
         Text(label.uppercase(), fontSize = 10.sp, letterSpacing = 1.sp, color = p.muted, maxLines = 2, fontWeight = FontWeight.Bold)
     }
@@ -458,11 +457,11 @@ private fun SettingsSheet(act: MainActivity) {
     var office by remember { mutableStateOf(s.office) }
     OutlinedTextField(
         home, { home = it; prefs.edit { x -> x.copy(home = it.trim()) } }, label = { Text("Home address") },
-        singleLine = true, shape = RectangleShape, colors = riderFieldColors(), modifier = Modifier.fillMaxWidth(),
+        singleLine = true, shape = RoundedCornerShape(16.dp), colors = riderFieldColors(), modifier = Modifier.fillMaxWidth(),
     )
     OutlinedTextField(
         office, { office = it; prefs.edit { x -> x.copy(office = it.trim()) } }, label = { Text("Office address") },
-        singleLine = true, shape = RectangleShape, colors = riderFieldColors(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        singleLine = true, shape = RoundedCornerShape(16.dp), colors = riderFieldColors(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
     )
 
     SectionTitle("Emergency contacts")
@@ -486,11 +485,11 @@ private fun SettingsSheet(act: MainActivity) {
         var name by remember { mutableStateOf("") }
         var number by remember { mutableStateOf("") }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, shape = RectangleShape, colors = riderFieldColors(), modifier = Modifier.weight(1f))
+            OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, shape = RoundedCornerShape(16.dp), colors = riderFieldColors(), modifier = Modifier.weight(1f))
             OutlinedTextField(
                 number, { number = it }, label = { Text("Phone") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                shape = RectangleShape, colors = riderFieldColors(), modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(16.dp), colors = riderFieldColors(), modifier = Modifier.weight(1f),
             )
         }
         PillButton("Add contact", Modifier.fillMaxWidth().padding(top = 8.dp), primary = false) {
@@ -538,7 +537,7 @@ private fun SosSheet(act: MainActivity, close: () -> Unit) {
     var progress by remember { mutableFloatStateOf(0f) }
     SheetHeader("Emergency", "Hold the button to text your location to your contacts")
     Box(
-        Modifier.fillMaxWidth().height(84.dp).clip(RectangleShape).background(p.bad.copy(alpha = 0.2f))
+        Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(16.dp)).background(p.bad.copy(alpha = 0.2f))
             .pointerInput(Unit) {
                 detectTapGestures(onPress = {
                     val job = scope.launch {
@@ -568,7 +567,7 @@ private fun SosSheet(act: MainActivity, close: () -> Unit) {
     Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("112" to "All emergencies", "108" to "Ambulance", "100" to "Police").forEach { (n, label) ->
             Column(
-                Modifier.weight(1f).clip(RectangleShape).background(p.glass).clickable { Nav.dial(act, n) }.padding(12.dp)
+                Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(p.glass).clickable { Nav.dial(act, n) }.padding(12.dp)
             ) {
                 Text(n, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Text("Call · $label", fontSize = 12.sp, color = p.muted)
@@ -645,7 +644,7 @@ fun PermissionList(act: MainActivity) {
                     if (granted) "On" else "Allow",
                     color = if (granted) p.ok else Color.White,
                     fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                    modifier = Modifier.clip(RectangleShape)
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp))
                         .background(if (granted) p.ok.copy(alpha = 0.15f) else p.blue)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
@@ -661,10 +660,10 @@ fun Onboarding(act: MainActivity, done: () -> Unit) {
         Column(
             Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
         ) {
-            PopSurface(Modifier.size(62.dp), colors = popColors(PopKind.Accent), depth = 5.dp, shimmer = true) {
+            PopSurface(Modifier.size(62.dp), colors = popColors(PopKind.Accent), shimmer = true, shape = RoundedCornerShape(20.dp)) {
                 Icon(Icons.Rounded.TwoWheeler, null, modifier = Modifier.size(32.dp))
             }
-            Text("Set up RiderDeck", fontFamily = Display, fontSize = 34.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 18.dp).enter(1))
+            Text("Set up RiderDeck", fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 18.dp).enter(1))
             Text(
                 "Allow what you want to use. You can change these later in More → Permissions.",
                 fontSize = 14.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
@@ -721,7 +720,7 @@ fun Overlays(act: MainActivity) {
             enter = slideInVertically(spring(dampingRatio = 0.6f, stiffness = 420f)) { -it * 2 } + fadeIn(),
             exit = slideOutVertically(tween(220)) { -it * 2 } + fadeOut(tween(220)),
         ) {
-            PopSurface(Modifier.widthIn(max = 520.dp), colors = popColors(PopKind.Primary), depth = 4.dp) {
+            PopSurface(Modifier.widthIn(max = 520.dp), colors = popColors(PopKind.Primary), shape = RoundedCornerShape(50)) {
                 Text(
                     lastToast, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
@@ -738,7 +737,7 @@ private fun CallCard(act: MainActivity, caller: String) {
     val p = LocalPal.current
     val g = LocalGlove.current
     Column(
-        Modifier.fillMaxWidth().background(p.sheet).border(1.dp, p.stroke).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.sheet).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -760,11 +759,11 @@ private fun CallCard(act: MainActivity, caller: String) {
 @Composable
 private fun BigCallButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     val colors = if (color == LocalPal.current.bad) popColors(PopKind.Danger)
-    else PopColors(Color(0xFF16A34A), Color.White, Color(0xFF0E7434), Color(0xFF0A5426), null)
-    PopSurface(modifier, colors = colors, depth = 5.dp, shimmer = true, onClick = onClick) {
+    else PopColors(Color(0xFF16A34A), Color.White, gradient = listOf(Color(0xFF22C55E), Color(0xFF15803D)), glow = Color(0xFF22C55E))
+    PopSurface(modifier, colors = colors, onClick = onClick, shape = RoundedCornerShape(20.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, null)
-            Text(label.uppercase(), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, letterSpacing = 1.sp)
+            Text(label, fontWeight = FontWeight.Bold, fontSize = 13.sp)
         }
     }
 }
@@ -781,10 +780,10 @@ private fun CallBar(act: MainActivity, caller: String, startedAt: Long) {
     }
     val secs = ((now - startedAt) / 1000).coerceAtLeast(0)
     Row(
-        Modifier.fillMaxWidth().background(p.sheet).border(1.dp, p.stroke).padding(10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.sheet).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(42.dp).clip(RectangleShape).background(p.ok.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(16.dp)).background(p.ok.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.Call, null, tint = p.ok)
         }
         Column(Modifier.weight(1f)) {
@@ -793,7 +792,7 @@ private fun CallBar(act: MainActivity, caller: String, startedAt: Long) {
         }
         Text(
             "End", color = Color.White, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(RectangleShape).background(p.bad).clickable { Calls.decline(act) }
+            modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(p.bad).clickable { Calls.decline(act) }
                 .padding(horizontal = 18.dp, vertical = 12.dp),
         )
     }
@@ -803,10 +802,10 @@ private fun CallBar(act: MainActivity, caller: String, startedAt: Long) {
 private fun Banner(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, title: String, text: String, onClose: () -> Unit) {
     val p = LocalPal.current
     Row(
-        Modifier.fillMaxWidth().background(p.sheet).border(1.dp, p.stroke).padding(10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.sheet).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(42.dp).clip(RectangleShape).background(tint.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = tint)
         }
         Column(Modifier.weight(1f)) {
@@ -858,8 +857,8 @@ private fun CrashOverlay(secondsLeft: Int, onSafe: () -> Unit) {
             Text("POSSIBLE CRASH DETECTED", color = Color(0xFFFF8A8A), fontSize = 13.sp, letterSpacing = 2.5.sp, fontWeight = FontWeight.ExtraBold)
             RollingNumber(secondsLeft, fontSize = 96.sp, color = Color.White)
             Text("Sending your location to your emergency contacts", color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
-            PopSurface(Modifier.padding(top = 8.dp).widthIn(min = 260.dp), colors = popColors(PopKind.Primary), depth = 6.dp, shimmer = true, onClick = onSafe) {
-                Text("I'M OK", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp, modifier = Modifier.padding(vertical = 22.dp, horizontal = 40.dp))
+            PopSurface(Modifier.padding(top = 8.dp).widthIn(min = 260.dp), colors = popColors(PopKind.Primary), shimmer = true, onClick = onSafe, shape = RoundedCornerShape(50)) {
+                Text("I'm OK", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(vertical = 22.dp, horizontal = 48.dp))
             }
         }
     }

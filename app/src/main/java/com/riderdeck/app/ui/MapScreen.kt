@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Flag
@@ -87,7 +89,7 @@ import kotlin.math.roundToInt
 /** Google Maps navigation greens, on NeoPOP slabs. */
 private val NavGreen = Color(0xFF146C3B)
 private val NavGreenDark = Color(0xFF0D4F2A)
-private val NavColors = PopColors(NavGreen, Color.White, Color(0xFF0B4A27), Color(0xFF07361C), null)
+private val NavColors = PopColors(NavGreen, Color.White, gradient = listOf(Color(0xFF1C8C4D), Color(0xFF0F6A37)))
 private val EtaGreen = Color(0xFF1E8E3E)
 private val EtaGreenNight = Color(0xFF5BD47E)
 
@@ -101,8 +103,8 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
     var overviewKey by remember { mutableIntStateOf(0) }
     val routeCard = ru.loading || ru.route != null
     val bottomCard: Dp = when {
-        ru.navigating -> 90.dp
-        routeCard -> 140.dp
+        ru.navigating -> 82.dp
+        routeCard -> 130.dp
         else -> 0.dp
     }
 
@@ -200,8 +202,8 @@ private fun TurnBanner(
     then: Maneuver?,
     onClick: () -> Unit,
 ) {
-    Column(Modifier.widthIn(max = 540.dp).fillMaxWidth()) {
-        PopSurface(Modifier.fillMaxWidth(), colors = NavColors, depth = 4.dp, onClick = onClick, contentAlignment = Alignment.CenterStart) {
+    Column(Modifier.widthIn(max = 440.dp)) {
+        PopSurface(Modifier, colors = NavColors, onClick = onClick, contentAlignment = Alignment.CenterStart, shape = RoundedCornerShape(22.dp)) {
             AnimatedContent(
                 targetState = Triple(key, icon, street),
                 transitionSpec = {
@@ -211,19 +213,21 @@ private fun TurnBanner(
                 label = "turn",
             ) { (_, ic, st) ->
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                    Modifier.padding(start = 12.dp, end = 18.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (bitmap != null) {
-                        Image(bitmap.asImageBitmap(), null, Modifier.size(50.dp), colorFilter = ColorFilter.tint(Color.White))
-                    } else {
-                        Icon(ic, null, tint = Color.White, modifier = Modifier.size(50.dp))
+                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color(0x26FFFFFF)), contentAlignment = Alignment.Center) {
+                        if (bitmap != null) {
+                            Image(bitmap.asImageBitmap(), null, Modifier.size(36.dp), colorFilter = ColorFilter.tint(Color.White))
+                        } else {
+                            Icon(ic, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                        }
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text(distance, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 32.sp, maxLines = 1)
+                    Column {
+                        Text(distance, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 26.sp, maxLines = 1)
                         Text(
-                            st, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp,
+                            st, color = Color.White.copy(alpha = 0.92f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 19.sp,
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
                         )
                     }
@@ -232,11 +236,11 @@ private fun TurnBanner(
         }
         if (then != null) {
             Row(
-                Modifier.padding(start = 14.dp).background(NavGreenDark).padding(horizontal = 12.dp, vertical = 6.dp),
+                Modifier.padding(start = 18.dp).clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)).background(NavGreenDark).padding(horizontal = 12.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text("THEN", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                Text("Then", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Icon(maneuverIcon(then.type), null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
@@ -247,18 +251,16 @@ private fun TurnBanner(
 private fun SearchBar(onSearch: () -> Unit, onMic: () -> Unit) {
     val p = LocalPal.current
     val g = LocalGlove.current
-    Row(Modifier.widthIn(max = 540.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PopSurface(Modifier.weight(1f), colors = popColors(PopKind.Plain), depth = 4.dp, onClick = onSearch, contentAlignment = Alignment.CenterStart) {
-            Row(
-                Modifier.fillMaxWidth().height((50 * g).dp).padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(Icons.Rounded.Search, null, tint = p.muted)
-                Text("Where to?", color = p.fg, fontSize = 18.sp, fontFamily = Display, fontWeight = FontWeight.Bold)
-            }
+    PopSurface(Modifier.widthIn(max = 440.dp).fillMaxWidth(), colors = popColors(PopKind.Plain), onClick = onSearch, contentAlignment = Alignment.CenterStart, shape = RoundedCornerShape(50)) {
+        Row(
+            Modifier.fillMaxWidth().height((52 * g).dp).padding(start = 16.dp, end = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(Icons.Rounded.Search, null, tint = p.muted)
+            Text("Where to?", color = p.muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            PopIcon(Icons.Rounded.Mic, "Voice command", kind = PopKind.Accent, size = 42.dp, onClick = onMic)
         }
-        PopIcon(Icons.Rounded.Mic, "Voice command", kind = PopKind.Accent, size = 50.dp, onClick = onMic)
     }
 }
 
@@ -266,7 +268,7 @@ private fun SearchBar(onSearch: () -> Unit, onMic: () -> Unit) {
 private fun PinCard(pin: Pin) {
     val p = LocalPal.current
     val km = PlaceSearch.distanceFromMe(pin.lat, pin.lon)
-    PopSurface(Modifier.widthIn(max = 540.dp).fillMaxWidth(), colors = popColors(PopKind.Plain), depth = 4.dp, contentAlignment = Alignment.CenterStart) {
+    PopSurface(Modifier.widthIn(max = 440.dp).fillMaxWidth(), colors = popColors(PopKind.Plain), contentAlignment = Alignment.CenterStart, shape = RoundedCornerShape(22.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -278,7 +280,7 @@ private fun PinCard(pin: Pin) {
                 if (km != null) Text(formatKm(km), fontSize = 12.5.sp, color = p.muted, fontWeight = FontWeight.SemiBold)
             }
             PopButton("Route", kind = PopKind.Accent, icon = Icons.Rounded.Navigation, height = 40.dp) { Navigator.preview(pin) }
-            PopIcon(Icons.Rounded.Close, "Clear", size = 40.dp) { Navigator.stop() }
+            PopIcon(Icons.Rounded.Close, "Clear", kind = PopKind.Secondary, size = 38.dp) { Navigator.stop() }
         }
     }
 }
@@ -301,13 +303,13 @@ private fun RouteSheet(ru: RouteUi, act: MainActivity, onOverview: () -> Unit, m
     val p = LocalPal.current
     val r = ru.route
     val green = if (p.dark) EtaGreenNight else EtaGreen
-    PopSurface(modifier.widthIn(max = 580.dp), colors = popColors(PopKind.Plain), depth = 5.dp, contentAlignment = Alignment.TopStart) {
+    PopSurface(modifier.widthIn(max = 520.dp), colors = popColors(PopKind.Plain), contentAlignment = Alignment.TopStart, shape = RoundedCornerShape(24.dp)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (r == null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Dot(p.pop)
                     Text("Finding the best bike route…", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    PopIcon(Icons.Rounded.Close, "Cancel", size = 40.dp) { Navigator.stop() }
+                    PopIcon(Icons.Rounded.Close, "Cancel", kind = PopKind.Secondary, size = 38.dp) { Navigator.stop() }
                 }
                 return@Column
             }
@@ -320,20 +322,20 @@ private fun RouteSheet(ru: RouteUi, act: MainActivity, onOverview: () -> Unit, m
 
             if (ru.navigating) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PopIcon(Icons.Rounded.Close, "End navigation", kind = PopKind.Danger, size = 44.dp) { Navigator.stop() }
+                    PopIcon(Icons.Rounded.Close, "End navigation", kind = PopKind.Danger, size = 42.dp) { Navigator.stop() }
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             if (mins < 60) {
-                                RollingNumber(mins, fontSize = 26.sp, color = green)
-                                Text(" min", color = green, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 2.dp))
+                                RollingNumber(mins, fontSize = 24.sp, color = green)
+                                Text(" min", color = green, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(bottom = 2.dp))
                             } else {
                                 Text(timeText, color = green, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
                             }
                         }
                         Text("$km · $arrive", color = p.muted, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
-                    PopIcon(Icons.Rounded.Share, "Share ETA", size = 44.dp) { shareEta(act, r.dest.title, arrive, timeText) }
-                    PopIcon(Icons.Rounded.ZoomOutMap, "Route overview", size = 44.dp, onClick = onOverview)
+                    PopIcon(Icons.Rounded.Share, "Share ETA", kind = PopKind.Secondary, size = 42.dp) { shareEta(act, r.dest.title, arrive, timeText) }
+                    PopIcon(Icons.Rounded.ZoomOutMap, "Route overview", kind = PopKind.Secondary, size = 42.dp, onClick = onOverview)
                 }
             } else {
                 Row(verticalAlignment = Alignment.Top) {
@@ -347,11 +349,11 @@ private fun RouteSheet(ru: RouteUi, act: MainActivity, onOverview: () -> Unit, m
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    PopIcon(Icons.Rounded.Close, "Cancel route", size = 40.dp) { Navigator.stop() }
+                    PopIcon(Icons.Rounded.Close, "Cancel route", kind = PopKind.Secondary, size = 38.dp) { Navigator.stop() }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PopButton("Start", Modifier.weight(1f), kind = PopKind.Accent, icon = Icons.Rounded.Navigation, shimmer = true) { Navigator.start() }
-                    PopButton("Google Maps", Modifier.weight(1f), kind = PopKind.Secondary) { Nav.navigateTo(act, "${r.dest.lat},${r.dest.lon}") }
+                    PopButton("Start", Modifier.weight(1f), kind = PopKind.Accent, icon = Icons.Rounded.Navigation, shimmer = true, height = 46.dp) { Navigator.start() }
+                    PopButton("Google Maps", Modifier.weight(1f), kind = PopKind.Secondary, height = 46.dp) { Nav.navigateTo(act, "${r.dest.lat},${r.dest.lon}") }
                 }
             }
         }
@@ -362,14 +364,14 @@ private fun RouteSheet(ru: RouteUi, act: MainActivity, onOverview: () -> Unit, m
 
 @Composable
 fun MapButton(icon: ImageVector, desc: String, @Suppress("UNUSED_PARAMETER") tint: Color = LocalPal.current.blue, onClick: () -> Unit) {
-    PopIcon(icon, desc, kind = PopKind.Plain, size = 48.dp, onClick = onClick)
+    PopIcon(icon, desc, kind = PopKind.Plain, size = 46.dp, onClick = onClick)
 }
 
 @Composable
 private fun StatusChip(text: String, dot: Color) {
     val p = LocalPal.current
     Row(
-        Modifier.background(p.sheet).border(1.dp, p.stroke).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.clip(RoundedCornerShape(50)).background(p.sheet.copy(alpha = 0.94f)).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -384,7 +386,7 @@ fun formatKm(km: Float): String =
 /** Square NeoPOP button used in sheets (accent when primary). */
 @Composable
 fun RoundFab(icon: ImageVector, desc: String, primary: Boolean, onClick: () -> Unit) {
-    PopIcon(icon, desc, kind = if (primary) PopKind.Accent else PopKind.Plain, size = if (primary) 54.dp else 46.dp, onClick = onClick)
+    PopIcon(icon, desc, kind = if (primary) PopKind.Accent else PopKind.Plain, size = if (primary) 52.dp else 46.dp, onClick = onClick)
 }
 
 fun maneuverIcon(type: Int): ImageVector = when (type) {

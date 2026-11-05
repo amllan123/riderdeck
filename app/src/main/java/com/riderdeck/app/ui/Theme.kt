@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.Icon
@@ -54,17 +55,15 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -80,7 +79,6 @@ import kotlinx.coroutines.delay
 
 /* ======================= type ======================= */
 
-/** Body and numbers: a clean geometric sans, like CRED's. */
 val Manrope = FontFamily(
     Font(R.font.manrope_regular, FontWeight.Normal),
     Font(R.font.manrope_semibold, FontWeight.Medium),
@@ -90,7 +88,7 @@ val Manrope = FontFamily(
     Font(R.font.manrope_extrabold, FontWeight.Black),
 )
 
-/** Display headings: a high-contrast serif, like CRED's Cirka. */
+/** Kept for the odd editorial touch; the dashboard itself is all Manrope. */
 val Display = FontFamily(
     Font(R.font.playfair_bold, FontWeight.Bold),
     Font(R.font.playfair_black, FontWeight.Black),
@@ -115,28 +113,28 @@ data class Pal(
     val fg: Color, val muted: Color, val faint: Color, val glass: Color,
     val blue: Color, val cyan: Color, val ok: Color, val warn: Color, val bad: Color,
     val sheet: Color, val dark: Boolean,
-    /** NeoPOP 3D sides of a slab: right face and bottom face. */
+    /** Kept for compatibility; modern surfaces don't draw hard edges. */
     val edgeR: Color, val edgeB: Color,
-    /** The one loud accent. */
-    val pop: Color, val onPop: Color,
+    /** Brand accent: a violet → cyan glow. */
+    val pop: Color, val onPop: Color, val pop2: Color,
 )
 
 val DarkPal = Pal(
-    bg = Color(0xFF0B0B0C), panel = Color(0xFF161618), panelHi = Color(0xFF1E1E21), stroke = Color(0xFF2C2C30),
-    fg = Color(0xFFF5F5F2), muted = Color(0xFF8E8E96), faint = Color(0xFF55555C), glass = Color(0x0FFFFFFF),
-    blue = Color(0xFF4C8DF6), cyan = Color(0xFF5ED6F2), ok = Color(0xFF2BD67B), warn = Color(0xFFFFB020), bad = Color(0xFFFF4F4F),
-    sheet = Color(0xFF131315), dark = true,
-    edgeR = Color(0xFF242428), edgeB = Color(0xFF1C1C1F),
-    pop = Color(0xFFD4FF4F), onPop = Color(0xFF0B0B0C),
+    bg = Color(0xFF06080C), panel = Color(0xFF0F1219), panelHi = Color(0xFF171B25), stroke = Color(0x14FFFFFF),
+    fg = Color(0xFFF4F6FA), muted = Color(0xFF8A93A6), faint = Color(0xFF4A5264), glass = Color(0x0DFFFFFF),
+    blue = Color(0xFF4C8DF6), cyan = Color(0xFF22D3EE), ok = Color(0xFF34D399), warn = Color(0xFFFBBF24), bad = Color(0xFFFF5A5F),
+    sheet = Color(0xFF0E1118), dark = true,
+    edgeR = Color.Transparent, edgeB = Color.Transparent,
+    pop = Color(0xFF8B7BFF), onPop = Color.White, pop2 = Color(0xFF22D3EE),
 )
 
 val SunPal = Pal(
-    bg = Color(0xFFE9E9E6), panel = Color(0xFFFFFFFF), panelHi = Color(0xFFF7F7F5), stroke = Color(0xFF0D0D0D),
-    fg = Color(0xFF0D0D0D), muted = Color(0xFF55555C), faint = Color(0xFF9A9AA0), glass = Color(0x0D000000),
-    blue = Color(0xFF1A62E8), cyan = Color(0xFF0A8FB8), ok = Color(0xFF0E9F55), warn = Color(0xFFB36B00), bad = Color(0xFFE02D2D),
+    bg = Color(0xFFEEF1F6), panel = Color(0xFFFFFFFF), panelHi = Color(0xFFF8FAFD), stroke = Color(0x140F172A),
+    fg = Color(0xFF0B1220), muted = Color(0xFF5B6475), faint = Color(0xFFA0A8B8), glass = Color(0x0A0F172A),
+    blue = Color(0xFF1A62E8), cyan = Color(0xFF0891B2), ok = Color(0xFF0E9F6E), warn = Color(0xFFB45309), bad = Color(0xFFE5383B),
     sheet = Color(0xFFFFFFFF), dark = false,
-    edgeR = Color(0xFF7A7A7A), edgeB = Color(0xFF4A4A4A),
-    pop = Color(0xFF5B2EFF), onPop = Color(0xFFFFFFFF),
+    edgeR = Color.Transparent, edgeB = Color.Transparent,
+    pop = Color(0xFF6D4CFF), onPop = Color.White, pop2 = Color(0xFF0891B2),
 )
 
 val LocalPal = staticCompositionLocalOf { DarkPal }
@@ -159,118 +157,112 @@ fun RiderTheme(sun: Boolean, gloves: Boolean, content: @Composable () -> Unit) {
     }
 }
 
-/* ======================= NeoPOP surfaces ======================= */
+/** Brand gradient (violet → cyan). */
+fun Pal.brand(): Brush = Brush.linearGradient(listOf(pop, pop2))
 
-private fun edgePaths(w: Float, h: Float, d: Float): Pair<Path, Path> {
-    val right = Path().apply { moveTo(w - d, 0f); lineTo(w, d); lineTo(w, h); lineTo(w - d, h - d); close() }
-    val bottom = Path().apply { moveTo(0f, h - d); lineTo(w - d, h - d); lineTo(w, h); lineTo(d, h); close() }
-    return right to bottom
-}
+/* ======================= surfaces ======================= */
 
-/** Dashboard slab: flat face with a hairline, sitting on hard 3D edges (CRED NeoPOP "elevated" card). */
+/** Dashboard card: soft gradient fill, rounded, a faint top highlight in dark and a soft shadow in light. */
 @Composable
-fun Modifier.panel(@Suppress("UNUSED_PARAMETER") radius: Dp = 0.dp, depth: Dp = 3.dp): Modifier {
+fun Modifier.panel(radius: Dp = 26.dp, @Suppress("UNUSED_PARAMETER") depth: Dp = 0.dp): Modifier {
     val p = LocalPal.current
-    val d = with(LocalDensity.current) { depth.toPx() }
-    return this
-        .drawBehind {
-            val (r, b) = edgePaths(size.width, size.height, d)
-            drawPath(r, p.edgeR)
-            drawPath(b, p.edgeB)
-            drawRect(p.panel, size = size.copy(width = size.width - d, height = size.height - d))
-            drawRect(
-                Brush.verticalGradient(listOf(p.panelHi, p.panel), endY = size.height * 0.6f),
-                size = size.copy(width = size.width - d, height = size.height - d),
-            )
-        }
-        .padding(end = depth, bottom = depth)
-        .border(1.dp, p.stroke)
-        .clipToBounds()
+    val shape = RoundedCornerShape(radius)
+    val base = if (p.dark) this else this.shadow(10.dp, shape, ambientColor = Color(0x220F172A), spotColor = Color(0x330F172A))
+    return base
+        .clip(shape)
+        .background(Brush.verticalGradient(listOf(p.panelHi, p.panel)))
+        .border(
+            1.dp,
+            if (p.dark) Brush.verticalGradient(listOf(Color(0x1FFFFFFF), Color(0x05FFFFFF))) else Brush.verticalGradient(listOf(p.stroke, p.stroke)),
+            shape,
+        )
 }
 
 enum class PopKind { Primary, Secondary, Danger, Accent, Plain }
 
-data class PopColors(val face: Color, val content: Color, val edgeR: Color, val edgeB: Color, val border: Color?)
+data class PopColors(
+    val face: Color,
+    val content: Color,
+    val edgeR: Color = Color.Transparent,
+    val edgeB: Color = Color.Transparent,
+    val border: Color? = null,
+    val gradient: List<Color>? = null,
+    val glow: Color? = null,
+)
 
 @Composable
 fun popColors(kind: PopKind): PopColors {
     val p = LocalPal.current
     return when (kind) {
-        PopKind.Primary -> if (p.dark) PopColors(Color(0xFFF5F5F2), Color(0xFF0B0B0C), Color(0xFF9C9C9C), Color(0xFF6E6E6E), null)
-        else PopColors(Color(0xFF0D0D0D), Color.White, Color(0xFF5A5A5A), Color(0xFF333333), null)
-        PopKind.Accent -> if (p.dark) PopColors(p.pop, p.onPop, Color(0xFF93B52A), Color(0xFF6E8A1D), null)
-        else PopColors(p.pop, p.onPop, Color(0xFF3B1BB0), Color(0xFF281280), null)
-        PopKind.Danger -> PopColors(Color(0xFFFF4F4F), Color.White, Color(0xFFB32E2E), Color(0xFF861F1F), null)
-        PopKind.Secondary -> PopColors(p.panelHi, p.fg, p.edgeR, p.edgeB, p.stroke)
-        PopKind.Plain -> PopColors(p.sheet, p.fg, p.edgeR, p.edgeB, p.stroke)
+        PopKind.Primary -> if (p.dark) PopColors(Color(0xFFF4F6FA), Color(0xFF06080C)) else PopColors(Color(0xFF0B1220), Color.White)
+        PopKind.Accent -> PopColors(p.pop, Color.White, gradient = listOf(p.pop, p.pop2), glow = p.pop)
+        PopKind.Danger -> PopColors(Color(0xFFFF5A5F), Color.White, gradient = listOf(Color(0xFFFF7A7F), Color(0xFFE5383B)), glow = Color(0xFFFF5A5F))
+        PopKind.Secondary -> PopColors(p.glass, p.fg, border = p.stroke)
+        PopKind.Plain -> PopColors(if (p.dark) Color(0xF0151923) else Color(0xF7FFFFFF), p.fg, border = p.stroke)
     }
 }
 
 /**
- * NeoPOP pressable: the face sits on two hard 3D edges and sinks into them when pressed,
- * with a spring and a haptic tick.
+ * Pressable surface: rounded, gradient or solid, soft glow for brand/danger buttons,
+ * springs down a little when pressed with a haptic tick.
  */
 @Composable
 fun PopSurface(
     modifier: Modifier = Modifier,
     colors: PopColors,
-    depth: Dp = 4.dp,
+    @Suppress("UNUSED_PARAMETER") depth: Dp = 0.dp,
     shimmer: Boolean = false,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     contentAlignment: Alignment = Alignment.Center,
+    shape: Shape = RoundedCornerShape(18.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val t by animateFloatAsState(
-        if (pressed && onClick != null) 1f else 0f,
-        spring(dampingRatio = 0.55f, stiffness = 1500f), label = "press",
+    val s by animateFloatAsState(
+        if (pressed && onClick != null) 0.95f else 1f,
+        spring(dampingRatio = 0.5f, stiffness = 900f), label = "press",
     )
     val view = LocalView.current
     LaunchedEffect(pressed) {
         if (pressed && onClick != null) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
     }
-    val dpx = with(LocalDensity.current) { depth.toPx() }
+    val p = LocalPal.current
+    val glow = colors.glow
     Box(
         modifier
-            .drawBehind {
-                val (r, b) = edgePaths(size.width, size.height, dpx)
-                drawPath(r, colors.edgeR)
-                drawPath(b, colors.edgeB)
-            }
+            .graphicsLayer { scaleX = s; scaleY = s }
+            .then(
+                when {
+                    glow != null -> Modifier.shadow(14.dp, shape, ambientColor = glow, spotColor = glow)
+                    !p.dark && colors.face.alpha > 0.5f -> Modifier.shadow(6.dp, shape, ambientColor = Color(0x220F172A), spotColor = Color(0x330F172A))
+                    else -> Modifier
+                }
+            )
+            .clip(shape)
+            .then(if (colors.gradient != null) Modifier.background(Brush.linearGradient(colors.gradient)) else Modifier.background(colors.face))
+            .then(if (colors.border != null) Modifier.border(1.dp, colors.border, shape) else Modifier)
+            .then(if (shimmer) Modifier.shimmer(colors.face) else Modifier)
             .then(
                 if (onClick != null) Modifier.clickable(src, indication = null, enabled = enabled, onClick = onClick)
                 else Modifier
-            )
-            .padding(end = depth, bottom = depth),
-        propagateMinConstraints = true,
+            ),
+        contentAlignment = contentAlignment,
     ) {
-        Box(
-            Modifier
-                .graphicsLayer {
-                    translationX = dpx * t
-                    translationY = dpx * t
-                }
-                .background(colors.face)
-                .then(if (colors.border != null) Modifier.border(1.dp, colors.border) else Modifier)
-                .then(if (shimmer) Modifier.shimmer(colors.face) else Modifier),
-            contentAlignment = contentAlignment,
-        ) {
-            CompositionLocalProvider(LocalContentColor provides colors.content) { content() }
-        }
+        CompositionLocalProvider(LocalContentColor provides colors.content) { content() }
     }
 }
 
-/** CRED-style light sweep across a button every few seconds. */
+/** A light sweep across a button every few seconds. */
 @Composable
 fun Modifier.shimmer(face: Color = Color.Black): Modifier {
     val tr = rememberInfiniteTransition(label = "shimmer")
     val x by tr.animateFloat(
         -0.6f, 1.6f,
-        infiniteRepeatable(tween(1500, delayMillis = 2200, easing = LinearEasing)), label = "x",
+        infiniteRepeatable(tween(1400, delayMillis = 2600, easing = LinearEasing)), label = "x",
     )
-    val band = if (face.luminance() > 0.6f) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.30f)
+    val band = if (face.luminance() > 0.6f) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.28f)
     return drawWithContent {
         drawContent()
         val w = size.width
@@ -284,12 +276,12 @@ fun Modifier.shimmer(face: Color = Color.Black): Modifier {
     }
 }
 
-/** Press-to-shrink for whole cards and panels, with haptic. */
+/** Press-to-shrink for cards and icons, with haptic. */
 @Composable
 fun Modifier.pressable(onClick: () -> Unit): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) 0.975f else 1f, spring(dampingRatio = 0.6f, stiffness = 900f), label = "scale")
+    val s by animateFloatAsState(if (pressed) 0.96f else 1f, spring(dampingRatio = 0.55f, stiffness = 900f), label = "scale")
     val view = LocalView.current
     LaunchedEffect(pressed) { if (pressed) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
     return this
@@ -297,24 +289,24 @@ fun Modifier.pressable(onClick: () -> Unit): Modifier {
         .clickable(src, indication = null, onClick = onClick)
 }
 
-/** Panels rise into place one after another when the dashboard appears. */
+/** Panels rise into place one after another. */
 @Composable
 fun Modifier.enter(index: Int): Modifier {
     val a = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        delay(120L + index * 80L)
-        a.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 180f))
+        delay(80L + index * 70L)
+        a.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 200f))
     }
     return graphicsLayer {
         val v = a.value
         alpha = v.coerceIn(0f, 1f)
-        translationY = (1f - v) * 70f
-        scaleX = 0.94f + 0.06f * v
-        scaleY = 0.94f + 0.06f * v
+        translationY = (1f - v) * 50f
+        scaleX = 0.96f + 0.04f * v
+        scaleY = 0.96f + 0.04f * v
     }
 }
 
-/** Odometer-style number: each digit rolls up or down when it changes. */
+/** Odometer-style number: each digit rolls when it changes. */
 @Composable
 fun RollingNumber(
     value: Int,
@@ -323,12 +315,14 @@ fun RollingNumber(
     modifier: Modifier = Modifier,
     fontWeight: FontWeight = FontWeight.ExtraBold,
     family: FontFamily = Manrope,
+    brush: Brush? = null,
 ) {
     val text = value.toString()
-    val style = TextStyle(
+    val base = TextStyle(
         fontFamily = family, fontWeight = fontWeight, fontSize = fontSize, lineHeight = fontSize,
-        color = color, fontFeatureSettings = "tnum", letterSpacing = (-0.02f * fontSize.value).sp,
+        color = color, fontFeatureSettings = "tnum", letterSpacing = (-0.03f * fontSize.value).sp,
     )
+    val style = if (brush != null) base.copy(brush = brush) else base
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         text.forEachIndexed { i, ch ->
             key(text.length - i) {
@@ -351,19 +345,19 @@ fun RollingNumber(
 
 @Composable
 fun Label(text: String, modifier: Modifier = Modifier, color: Color = LocalPal.current.muted) {
-    Text(text.uppercase(), modifier, color = color, fontSize = 10.5.sp, letterSpacing = 1.7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    Text(text.uppercase(), modifier, color = color, fontSize = 10.5.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.Bold, maxLines = 1)
 }
 
 @Composable
 fun SectionTitle(text: String) {
-    Label(text, Modifier.padding(top = 20.dp, bottom = 10.dp, start = 2.dp))
+    Label(text, Modifier.padding(top = 20.dp, bottom = 10.dp, start = 4.dp))
 }
 
 @Composable
 fun SheetHeader(title: String, sub: String? = null) {
     val p = LocalPal.current
     Column(Modifier.padding(bottom = 14.dp).enter(0)) {
-        Text(title, fontFamily = Display, fontWeight = FontWeight.Black, fontSize = 30.sp, lineHeight = 34.sp, color = p.fg)
+        Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, lineHeight = 30.sp, color = p.fg, letterSpacing = (-0.5).sp)
         if (sub != null) Text(sub, fontSize = 13.5.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp))
     }
 }
@@ -372,13 +366,13 @@ fun SheetHeader(title: String, sub: String? = null) {
 fun Tile(icon: ImageVector, tint: Color, title: String, sub: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val p = LocalPal.current
     val g = LocalGlove.current
-    PopSurface(modifier.fillMaxWidth(), colors = popColors(PopKind.Secondary), depth = 3.dp, onClick = onClick, contentAlignment = Alignment.CenterStart) {
+    PopSurface(modifier.fillMaxWidth(), colors = popColors(PopKind.Secondary), onClick = onClick, contentAlignment = Alignment.CenterStart) {
         Row(
             Modifier.fillMaxWidth().defaultMinSize(minHeight = (62 * g).dp).padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(Modifier.size(40.dp).background(tint.copy(alpha = 0.16f)).border(1.dp, tint.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
             }
             Column(Modifier.weight(1f)) {
@@ -405,7 +399,7 @@ fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean)
         Switch(
             checked = checked, onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedTrackColor = p.pop, checkedThumbColor = p.onPop, checkedBorderColor = p.pop,
+                checkedTrackColor = p.pop, checkedThumbColor = Color.White, checkedBorderColor = p.pop,
                 uncheckedTrackColor = p.glass, uncheckedThumbColor = p.muted, uncheckedBorderColor = p.stroke,
             ),
         )
@@ -415,15 +409,15 @@ fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean)
 @Composable
 fun Group(content: @Composable () -> Unit) {
     val p = LocalPal.current
-    Column(Modifier.fillMaxWidth().background(p.glass).border(1.dp, p.stroke)) { content() }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.glass).border(1.dp, p.stroke, RoundedCornerShape(18.dp))) { content() }
 }
 
-/** NeoPOP button. Primary = white slab with black text (dark) and a shimmer; secondary = outlined slab. */
 @Composable
 fun PillButton(text: String, modifier: Modifier = Modifier, primary: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
-    PopButton(text, modifier, if (primary) PopKind.Primary else PopKind.Secondary, icon, shimmer = primary, onClick = onClick)
+    PopButton(text, modifier, if (primary) PopKind.Accent else PopKind.Secondary, icon, onClick = onClick)
 }
 
+/** Rounded pill button. Accent = brand gradient with glow; Primary = white pill; Secondary = glass. */
 @Composable
 fun PopButton(
     text: String,
@@ -431,27 +425,27 @@ fun PopButton(
     kind: PopKind = PopKind.Primary,
     icon: ImageVector? = null,
     shimmer: Boolean = false,
-    height: Dp = 52.dp,
+    height: Dp = 50.dp,
     onClick: () -> Unit,
 ) {
     val g = LocalGlove.current
-    PopSurface(modifier, colors = popColors(kind), depth = 4.dp, shimmer = shimmer, onClick = onClick) {
+    PopSurface(modifier, colors = popColors(kind), shimmer = shimmer, onClick = onClick, shape = RoundedCornerShape(50)) {
         Row(
             Modifier.defaultMinSize(minHeight = height * g).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         ) {
             if (icon != null) Icon(icon, null, modifier = Modifier.size(20.dp))
-            Text(text.uppercase(), fontWeight = FontWeight.ExtraBold, fontSize = 13.5.sp, letterSpacing = 1.2.sp, maxLines = 1)
+            Text(text, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
         }
     }
 }
 
-/** Square NeoPOP icon button. */
+/** Round icon button. */
 @Composable
 fun PopIcon(icon: ImageVector, desc: String, modifier: Modifier = Modifier, kind: PopKind = PopKind.Plain, size: Dp = 46.dp, tint: Color? = null, onClick: () -> Unit) {
     val g = LocalGlove.current
-    PopSurface(modifier.size(size * g + 3.dp), colors = popColors(kind), depth = 3.dp, onClick = onClick) {
+    PopSurface(modifier.size(size * g), colors = popColors(kind), onClick = onClick, shape = CircleShape) {
         Icon(icon, desc, tint = tint ?: LocalContentColor.current)
     }
 }

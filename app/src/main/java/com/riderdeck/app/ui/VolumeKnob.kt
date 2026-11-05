@@ -141,10 +141,13 @@ fun VolumeKnob(modifier: Modifier) {
                 val c = Offset(size.width / 2, size.height / 2)
 
                 // Track and level
-                drawArc(p.fg.copy(alpha = 0.08f), 135f, 270f, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Butt))
+                drawArc(p.fg.copy(alpha = 0.08f), 135f, 270f, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 if (frac > 0f) {
-                    drawArc(p.pop.copy(alpha = 0.22f), 135f, 270f * frac, false, tl, arcSize, style = Stroke(stroke * 2.1f, cap = StrokeCap.Butt))
-                    drawArc(p.pop, 135f, 270f * frac, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Butt))
+                    val br = Brush.sweepGradient(0f to p.pop2, 0.75f to p.pop, 1f to p.pop2, center = c)
+                    androidx.compose.ui.graphics.drawscope.rotate(135f, c) {
+                        drawArc(br, 0f, 270f * frac, false, tl, arcSize, alpha = 0.22f, style = Stroke(stroke * 2.4f, cap = StrokeCap.Round))
+                        drawArc(br, 0f, 270f * frac, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                    }
                 }
                 // Knob body
                 val body = dim * 0.31f

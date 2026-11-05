@@ -79,7 +79,8 @@ class MainActivity : ComponentActivity() {
             if (RiderApp.prefs.s.value.crashDetection) startCrashCountdown()
         }
 
-        Recorder.init()
+        Demo.apply(intent)
+        if (!Demo.active) Recorder.init()
         setContent {
             val s by RiderApp.prefs.s.collectAsState()
             val w by Weather.state.collectAsState()
@@ -99,6 +100,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { Hub.device.collect { applyHeatGuard(it.tempC) } }
         lifecycleScope.launch {
             delay(5_000)
+            if (Demo.active) return@launch
             Docs.remindIfExpiring()
             delay(4_000)
             Service.remindIfDue()
@@ -106,8 +108,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             Hub.ride.collect { r ->
                 Navigator.onFix(r)
-                Weather.maybeRefresh(r)
-                Recorder.onRide(r)
+                if (!Demo.active) {
+                    Weather.maybeRefresh(r)
+                    Recorder.onRide(r)
+                }
                 val s = RiderApp.prefs.s.value
                 // over-speed beep, once per crossing
                 if (s.speedBeep && r.speedKmh > s.alertSpeed + 2 && !overSpeed) {
@@ -154,6 +158,7 @@ class MainActivity : ComponentActivity() {
 
     /** Called on start and again after the user grants permissions. */
     fun startTracking() {
+        if (Demo.active) return
         tracker.start()
         startCallMonitor()
     }

@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AddAPhoto
@@ -136,9 +138,9 @@ fun RideSheet(act: MainActivity) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         rides.forEachIndexed { i, r ->
-            PopSurface(Modifier.fillMaxWidth().enter(i.coerceAtMost(6)), colors = popColors(PopKind.Secondary), depth = 3.dp, onClick = { selected = r }, contentAlignment = Alignment.CenterStart) {
+            PopSurface(Modifier.fillMaxWidth().enter(i.coerceAtMost(6)), colors = popColors(PopKind.Secondary), onClick = { selected = r }, contentAlignment = Alignment.CenterStart) {
                 Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RouteSketch(r.points, Modifier.size(64.dp).background(p.bg).border(1.dp, p.stroke), stroke = 2.5f)
+                    RouteSketch(r.points, Modifier.size(64.dp).clip(RoundedCornerShape(14.dp)).background(p.bg), stroke = 2.5f)
                     Column(Modifier.weight(1f)) {
                         Text(rideDate(r.start), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, maxLines = 1)
                         Text(
@@ -164,7 +166,7 @@ private fun RideDetail(r: RideRecord, onBack: () -> Unit, onDelete: () -> Unit) 
     }
     Spacer(Modifier.height(12.dp))
     SheetHeader(rideDate(r.start), "%.1f km in %s".format(r.km, durationWords(r.movingSecs)))
-    Box(Modifier.fillMaxWidth().height(220.dp).background(p.bg).border(1.dp, p.stroke).enter(1)) {
+    Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(20.dp)).background(p.bg).enter(1)) {
         RouteSketch(r.points, Modifier.fillMaxSize(), stroke = 5f, animate = true)
     }
     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -274,7 +276,7 @@ fun ServiceSection() {
                 it.frac > 0.85f -> p.warn
                 else -> p.ok
             }
-            PopSurface(Modifier.fillMaxWidth(), colors = popColors(PopKind.Secondary), depth = 3.dp, contentAlignment = Alignment.TopStart) {
+            PopSurface(Modifier.fillMaxWidth(), colors = popColors(PopKind.Secondary), contentAlignment = Alignment.TopStart) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(it.title, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
@@ -283,8 +285,8 @@ fun ServiceSection() {
                             color = col, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp,
                         )
                     }
-                    Box(Modifier.fillMaxWidth().height(6.dp).background(p.fg.copy(alpha = 0.1f))) {
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(col))
+                    Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)).background(p.fg.copy(alpha = 0.1f))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(frac).clip(RoundedCornerShape(6.dp)).background(col))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Every ${it.every.roundToInt()} km", color = p.muted, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
@@ -366,10 +368,10 @@ private fun DocRow(t: DocType, ver: Int, modifier: Modifier, onPhoto: () -> Unit
         days <= 15 -> "Expires in $days days" to p.warn
         else -> "Valid till ${SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(Docs.expiry(t.key)))}" to p.ok
     }
-    PopSurface(modifier.fillMaxWidth(), colors = popColors(PopKind.Secondary), depth = 3.dp, contentAlignment = Alignment.CenterStart) {
+    PopSurface(modifier.fillMaxWidth(), colors = popColors(PopKind.Secondary), contentAlignment = Alignment.CenterStart) {
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
-                Modifier.size(width = 76.dp, height = 56.dp).background(p.bg).border(1.dp, p.stroke)
+                Modifier.size(width = 76.dp, height = 56.dp).clip(RoundedCornerShape(12.dp)).background(p.bg)
                     .pressable { if (has) onView() else onPhoto() },
                 contentAlignment = Alignment.Center,
             ) {
