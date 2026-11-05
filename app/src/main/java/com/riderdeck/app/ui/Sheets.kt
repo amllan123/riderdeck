@@ -255,7 +255,7 @@ fun SearchScreen(act: MainActivity, open: (String) -> Unit, close: () -> Unit) {
             Modifier.align(Alignment.TopCenter).widthIn(max = 780.dp).fillMaxSize().padding(horizontal = 12.dp),
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                Modifier.fillMaxWidth().padding(vertical = if (portrait) 8.dp else 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -290,11 +290,12 @@ fun SearchScreen(act: MainActivity, open: (String) -> Unit, close: () -> Unit) {
                         Text("Searching…", fontSize = 14.sp, color = p.muted, modifier = Modifier.padding(8.dp))
                     }
                     results.isNotEmpty() -> {
-                        item { Label(if (google == PlaceSearch.Google.OK) "Results · Google" else "Results", Modifier.padding(start = 6.dp, top = 4.dp)) }
+                        // landscape: every pixel above the keyboard goes to results
+                        if (portrait) item { Label(if (google == PlaceSearch.Google.OK) "Results · Google" else "Results", Modifier.padding(start = 6.dp, top = 4.dp)) }
                         items(results.size) { i ->
                             val pl = results[i]
                             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.glass)) {
-                                ResultRow(pl, onShow = { show(pl) }, onGo = { hideKeyboard(); close(); Navigator.previewPlace(ctx, pl) })
+                                ResultRow(pl, compact = !portrait, onShow = { show(pl) }, onGo = { hideKeyboard(); close(); Navigator.previewPlace(ctx, pl) })
                             }
                         }
                     }
@@ -346,10 +347,11 @@ fun SearchScreen(act: MainActivity, open: (String) -> Unit, close: () -> Unit) {
 }
 
 @Composable
-private fun ResultRow(pl: Place, onShow: () -> Unit, onGo: () -> Unit) {
+private fun ResultRow(pl: Place, compact: Boolean = false, onShow: () -> Unit, onGo: () -> Unit) {
     val p = LocalPal.current
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onShow).padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onShow)
+            .padding(start = 14.dp, end = 8.dp, top = if (compact) 6.dp else 10.dp, bottom = if (compact) 6.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -357,7 +359,7 @@ private fun ResultRow(pl: Place, onShow: () -> Unit, onGo: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(pl.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val dist = pl.distanceKm?.let { formatKm(it) + " · " } ?: ""
-            Text(dist + pl.sub, fontSize = 12.sp, color = p.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(dist + pl.sub, fontSize = 12.sp, color = p.muted, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
         }
         PopButton("Map", kind = PopKind.Secondary, height = 36.dp, onClick = onShow)
         PopButton("Go", kind = PopKind.Accent, height = 36.dp, onClick = onGo)
