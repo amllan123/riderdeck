@@ -29,6 +29,8 @@ shot() { # name rotation [extra am args]
   adb exec-out screencap -p > "$OUT/$name.png"
 }
 
+shot warmup 1
+rm -f "$OUT/warmup.png"
 shot shot-1-landscape 1
 shot shot-2-landscape-sheet 1 --es sheet more
 shot shot-3-portrait 0

@@ -335,28 +335,20 @@ fun SpeedPanel(ride: RideState, s: RiderSettings, compact: Boolean, open: (Strin
                 contentAlignment = Alignment.Center,
             ) { Text("${s.alertSpeed}", color = Color(0xFF111111), fontWeight = FontWeight.Black, fontSize = 12.sp) }
         }
-        if (!compact) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                lean()
-                Spacer(Modifier.weight(1f))
-                limitSign()
-            }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            lean()
+            Spacer(Modifier.weight(1f))
+            limitSign()
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                val side = if (maxWidth < maxHeight * 1.12f) maxWidth else maxHeight * 1.12f
-                SpeedRing(ride.speedKmh, over, s.alertSpeed, Modifier.size(side))
-            }
-            if (compact) {
-                Box(Modifier.align(Alignment.TopStart)) { lean() }
-                Box(Modifier.align(Alignment.TopEnd)) { limitSign() }
-            }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val side = if (maxWidth < maxHeight * 1.12f) maxWidth else maxHeight * 1.12f
+            SpeedRing(ride.speedKmh, over, s.alertSpeed, Modifier.size(side))
         }
         if (compact) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Stat("%.1f".format(ride.tripKm), "Trip km", Modifier.weight(1f))
-                Stat(duration(ride.movingSecs), "Time", Modifier.weight(1f))
-                Stat("$range", "Range", Modifier.weight(1f), if (range < 25) p.warn else p.fg)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                MiniStat("%.1f".format(ride.tripKm), "km")
+                MiniStat(duration(ride.movingSecs), "time")
+                MiniStat("$range", "km left", if (range < 25) p.warn else p.fg)
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -401,6 +393,15 @@ private fun LeanGauge(lean: Float, onCalibrate: () -> Unit) {
             Text("${abs(lean).roundToInt()}°", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 17.sp)
             Label("Lean")
         }
+    }
+}
+
+@Composable
+private fun MiniStat(value: String, label: String, color: Color = LocalPal.current.fg) {
+    val p = LocalPal.current
+    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = color, maxLines = 1)
+        Text(label, fontSize = 11.sp, color = p.muted, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(bottom = 1.dp))
     }
 }
 
