@@ -107,6 +107,8 @@ object Hub {
 
 data class Contact(val name: String, val number: String)
 
+data class Parking(val lat: Double, val lon: Double, val at: Long)
+
 data class RiderSettings(
     val home: String = "",
     val office: String = "",
@@ -115,6 +117,8 @@ data class RiderSettings(
     val crashDetection: Boolean = true,
     val heatGuard: Boolean = true,
     val sunlight: Boolean = false,
+    /** Switch between dark and sunlight screens at sunrise and sunset. */
+    val autoTheme: Boolean = false,
     val gloves: Boolean = false,
     val rideLock: Boolean = true,
     val speedBeep: Boolean = true,
@@ -138,6 +142,65 @@ class Prefs(ctx: Context) {
         set(v) {
             sp.edit().putBoolean("onboarded", v).apply()
         }
+
+    /* ---- odometer, service, records, parking, documents ---- */
+
+    var odoKm: Float
+        get() = sp.getFloat("odoKm", 0f)
+        set(v) { sp.edit().putFloat("odoKm", v).apply() }
+
+    var oilEveryKm: Float
+        get() = sp.getFloat("oilEveryKm", 3000f)
+        set(v) { sp.edit().putFloat("oilEveryKm", v).apply() }
+
+    var oilAtKm: Float
+        get() = sp.getFloat("oilAtKm", 0f)
+        set(v) { sp.edit().putFloat("oilAtKm", v).apply() }
+
+    var chainEveryKm: Float
+        get() = sp.getFloat("chainEveryKm", 500f)
+        set(v) { sp.edit().putFloat("chainEveryKm", v).apply() }
+
+    var chainAtKm: Float
+        get() = sp.getFloat("chainAtKm", 0f)
+        set(v) { sp.edit().putFloat("chainAtKm", v).apply() }
+
+    /** Best 0–60 km/h time in seconds, 0 when none yet. */
+    var best060: Float
+        get() = sp.getFloat("best060", 0f)
+        set(v) { sp.edit().putFloat("best060", v).apply() }
+
+    val parking = MutableStateFlow(loadParking())
+
+    fun saveParking(lat: Double, lon: Double, at: Long) {
+        sp.edit()
+            .putLong("parkLat", java.lang.Double.doubleToRawLongBits(lat))
+            .putLong("parkLon", java.lang.Double.doubleToRawLongBits(lon))
+            .putLong("parkAt", at)
+            .apply()
+        parking.value = Parking(lat, lon, at)
+    }
+
+    private fun loadParking(): Parking? {
+        val at = sp.getLong("parkAt", 0L)
+        if (at == 0L) return null
+        return Parking(
+            java.lang.Double.longBitsToDouble(sp.getLong("parkLat", 0L)),
+            java.lang.Double.longBitsToDouble(sp.getLong("parkLon", 0L)),
+            at,
+        )
+    }
+
+    fun docExpiry(key: String): Long = sp.getLong("doc_exp_$key", 0L)
+    fun setDocExpiry(key: String, at: Long) { sp.edit().putLong("doc_exp_$key", at).apply() }
+
+    /** Once-a-day reminders ("docs", "service", "headlight"…). */
+    fun remindedToday(key: String): Boolean {
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
+        if (sp.getString("rem_$key", "") == today) return true
+        sp.edit().putString("rem_$key", today).apply()
+        return false
+    }
 
     fun edit(change: (RiderSettings) -> RiderSettings) {
         val next = change(s.value)
@@ -167,6 +230,7 @@ class Prefs(ctx: Context) {
                 crashDetection = o.optBoolean("crashDetection", d.crashDetection),
                 heatGuard = o.optBoolean("heatGuard", d.heatGuard),
                 sunlight = o.optBoolean("sunlight", d.sunlight),
+                autoTheme = o.optBoolean("autoTheme", d.autoTheme),
                 gloves = o.optBoolean("gloves", d.gloves),
                 rideLock = o.optBoolean("rideLock", d.rideLock),
                 speedBeep = o.optBoolean("speedBeep", d.speedBeep),
@@ -190,6 +254,7 @@ class Prefs(ctx: Context) {
             .put("crashDetection", x.crashDetection)
             .put("heatGuard", x.heatGuard)
             .put("sunlight", x.sunlight)
+            .put("autoTheme", x.autoTheme)
             .put("gloves", x.gloves)
             .put("rideLock", x.rideLock)
             .put("speedBeep", x.speedBeep)

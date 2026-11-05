@@ -141,12 +141,10 @@ fun VolumeKnob(modifier: Modifier) {
                 val c = Offset(size.width / 2, size.height / 2)
 
                 // Track and level
-                drawArc(p.glass, 135f, 270f, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                drawArc(p.fg.copy(alpha = 0.08f), 135f, 270f, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Butt))
                 if (frac > 0f) {
-                    drawArc(
-                        Brush.sweepGradient(0f to p.cyan, 0.375f to p.blue, 0.75f to p.cyan, 1f to p.cyan, center = c),
-                        135f, 270f * frac, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round),
-                    )
+                    drawArc(p.pop.copy(alpha = 0.22f), 135f, 270f * frac, false, tl, arcSize, style = Stroke(stroke * 2.1f, cap = StrokeCap.Butt))
+                    drawArc(p.pop, 135f, 270f * frac, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Butt))
                 }
                 // Knob body
                 val body = dim * 0.31f
@@ -159,7 +157,7 @@ fun VolumeKnob(modifier: Modifier) {
                 val ang = Math.toRadians(135.0 + 270.0 * frac)
                 val r = body * 0.74f
                 drawCircle(
-                    if (vol == 0) p.muted else p.blue, dim * 0.035f,
+                    if (vol == 0) p.muted else p.pop, dim * 0.035f,
                     Offset(c.x + r * cos(ang).toFloat(), c.y + r * sin(ang).toFloat()),
                 )
             }

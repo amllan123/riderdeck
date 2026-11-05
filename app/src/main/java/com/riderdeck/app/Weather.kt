@@ -18,6 +18,9 @@ data class WeatherState(
     val isDay: Boolean = true,
     /** Minutes until rain starts in the next 2 hours, 0 = raining now, null = dry. */
     val rainInMin: Int? = null,
+    /** Today's sunrise and sunset (epoch ms), 0 when unknown. */
+    val sunriseMs: Long = 0L,
+    val sunsetMs: Long = 0L,
 )
 
 /** Current weather and a 2-hour rain warning from Open-Meteo (free, no key). */
@@ -65,7 +68,7 @@ object Weather {
             Locale.ROOT,
             "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f" +
                 "&current=temperature_2m,weather_code,wind_speed_10m,is_day" +
-                "&minutely_15=precipitation&forecast_minutely_15=8&timezone=auto",
+                "&minutely_15=precipitation&forecast_minutely_15=8&daily=sunrise,sunset&forecast_days=1&timezone=auto",
             lat, lon,
         )
         val c = URL(url).openConnection() as HttpURLConnection
@@ -84,6 +87,15 @@ object Weather {
                 }
             }
         }
+        val offset = java.time.ZoneOffset.ofTotalSeconds(o.optInt("utc_offset_seconds", 19800))
+        fun epoch(iso: String?): Long = try {
+            java.time.LocalDateTime.parse(iso).toEpochSecond(offset) * 1000
+        } catch (_: Exception) {
+            0L
+        }
+        val daily = o.optJSONObject("daily")
+        val sunrise = epoch(daily?.optJSONArray("sunrise")?.optString(0))
+        val sunset = epoch(daily?.optJSONArray("sunset")?.optString(0))
         val code = cur.optInt("weather_code", -1)
         if (code in 51..67 || code in 80..82 || code in 95..99) rainIn = 0
         WeatherState(
@@ -92,9 +104,20 @@ object Weather {
             windKmh = cur.optDouble("wind_speed_10m", 0.0).toFloat(),
             isDay = cur.optInt("is_day", 1) == 1,
             rainInMin = rainIn,
+            sunriseMs = sunrise,
+            sunsetMs = sunset,
         )
     } catch (_: Exception) {
         null
+    }
+
+    /** Daylight by today's sunrise/sunset; falls back to 6:30–18:15 before the first fetch. */
+    fun isDaylight(now: Long = System.currentTimeMillis()): Boolean {
+        val w = state.value
+        if (w.sunriseMs > 0 && w.sunsetMs > 0) return now in w.sunriseMs..w.sunsetMs
+        val c = java.util.Calendar.getInstance()
+        val mins = c.get(java.util.Calendar.HOUR_OF_DAY) * 60 + c.get(java.util.Calendar.MINUTE)
+        return mins in (6 * 60 + 30)..(18 * 60 + 15)
     }
 
     fun describe(code: Int): String = when (code) {

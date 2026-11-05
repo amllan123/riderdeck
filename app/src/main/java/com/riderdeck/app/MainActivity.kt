@@ -24,7 +24,11 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -75,18 +79,35 @@ class MainActivity : ComponentActivity() {
             if (RiderApp.prefs.s.value.crashDetection) startCrashCountdown()
         }
 
+        Recorder.init()
         setContent {
             val s by RiderApp.prefs.s.collectAsState()
-            RiderTheme(sun = s.sunlight, gloves = s.gloves) {
+            val w by Weather.state.collectAsState()
+            var minute by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    delay(60_000)
+                    minute = System.currentTimeMillis()
+                }
+            }
+            val sun = if (s.autoTheme) remember(w, minute) { Weather.isDaylight(minute) } else s.sunlight
+            RiderTheme(sun = sun, gloves = s.gloves) {
                 RiderRoot(this)
             }
         }
 
         lifecycleScope.launch { Hub.device.collect { applyHeatGuard(it.tempC) } }
         lifecycleScope.launch {
+            delay(5_000)
+            Docs.remindIfExpiring()
+            delay(4_000)
+            Service.remindIfDue()
+        }
+        lifecycleScope.launch {
             Hub.ride.collect { r ->
                 Navigator.onFix(r)
                 Weather.maybeRefresh(r)
+                Recorder.onRide(r)
                 val s = RiderApp.prefs.s.value
                 // over-speed beep, once per crossing
                 if (s.speedBeep && r.speedKmh > s.alertSpeed + 2 && !overSpeed) {
