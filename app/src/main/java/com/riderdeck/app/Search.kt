@@ -46,7 +46,25 @@ data class Pin(val lat: Double, val lon: Double, val title: String)
 object PlaceSearch {
     private const val TAG = "RiderSearch"
 
-    enum class Google { UNKNOWN, OK, OFF, NO_KEY }
+    enum class Google { UNKNOWN, OK, OFF, NO_KEY, LIMIT }
+
+    /**
+     * Daily ceilings so RiderDeck alone can never leave Google's free tier (India: 70,000 autocomplete
+     * requests and 70,000 place lookups free per month). 500/day × 31 = 15,500; 100/day × 31 = 3,100.
+     */
+    private const val MAX_AUTOCOMPLETE_PER_DAY = 500
+    private const val MAX_DETAILS_PER_DAY = 100
+
+    @Synchronized
+    private fun allow(kind: String, max: Int): Boolean {
+        val sp = RiderApp.ctx.getSharedPreferences("riderdeck_google", Context.MODE_PRIVATE)
+        val today = java.text.SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(java.util.Date())
+        if (sp.getString("day", "") != today) sp.edit().clear().putString("day", today).apply()
+        val n = sp.getInt(kind, 0)
+        if (n >= max) return false
+        sp.edit().putInt(kind, n + 1).apply()
+        return true
+    }
 
     /** Whether Google search works with this build's key (the search sheet shows a hint when it's OFF). */
     val google = MutableStateFlow(if (BuildConfig.HAS_MAPS_KEY) Google.UNKNOWN else Google.NO_KEY)
@@ -77,6 +95,11 @@ object PlaceSearch {
     suspend fun resolve(ctx: Context, p: Place): Place? = withContext(Dispatchers.IO) {
         if (p.resolved) return@withContext p
         val id = p.id ?: return@withContext null
+        if (!allow("details", MAX_DETAILS_PER_DAY)) {
+            // daily Google limit reached: find the same place on OpenStreetMap instead
+            google.value = Google.LIMIT
+            return@withContext fallback(ctx, "${p.title} ${p.sub}".trim()).firstOrNull()?.copy(title = p.title)
+        }
         try {
             val url = "https://places.googleapis.com/v1/places/" + Uri.encode(id) +
                 "?languageCode=en&sessionToken=" + Uri.encode(session)
@@ -115,6 +138,10 @@ object PlaceSearch {
         if (!BuildConfig.HAS_MAPS_KEY) return emptyList()
         // Key not set up for Places: don't keep asking on every letter; try again after a while.
         if (google.value == Google.OFF && System.currentTimeMillis() - offAt < 5 * 60_000) return emptyList()
+        if (!allow("autocomplete", MAX_AUTOCOMPLETE_PER_DAY)) {
+            google.value = Google.LIMIT
+            return emptyList()
+        }
         val r = Hub.ride.value
         val body = JSONObject()
             .put("input", q)

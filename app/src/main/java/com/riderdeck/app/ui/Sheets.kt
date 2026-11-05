@@ -312,6 +312,12 @@ fun SearchScreen(act: MainActivity, open: (String) -> Unit, close: () -> Unit) {
                         }
                     }
                 }
+                if (google == PlaceSearch.Google.LIMIT && q.isNotBlank()) item {
+                    Text(
+                        "Today's free Google searches are used up, so these come from OpenStreetMap. Google is back tomorrow.",
+                        fontSize = 12.sp, color = p.muted, lineHeight = 16.sp, modifier = Modifier.padding(horizontal = 6.dp),
+                    )
+                }
                 if (google == PlaceSearch.Google.OFF && q.isNotBlank()) item {
                     Text(
                         "Google search is off for your Maps key, so these come from OpenStreetMap. Turn on “Places API (New)” for the key to get Google Maps results here.",
