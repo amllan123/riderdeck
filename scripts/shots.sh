@@ -13,14 +13,17 @@ adb shell settings put global window_animation_scale 1
 adb shell settings put global transition_animation_scale 1
 adb shell settings put global animator_duration_scale 1
 adb install -r -g "$APK" || exit 0
+# no "Viewing full screen" hint, fixed rotation
+adb shell settings put secure immersive_mode_confirmations confirmed
+adb shell settings put system accelerometer_rotation 0
 
 shot() { # name rotation [extra am args]
   local name=$1 rot=$2
   shift 2
   adb shell am force-stop $PKG
-  adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation "$rot"
-  sleep 3
+  adb shell wm user-rotation lock "$rot" || true
+  sleep 4
   adb shell am start -W -n $ACT --ez demo true "$@"
   sleep 22
   adb exec-out screencap -p > "$OUT/$name.png"

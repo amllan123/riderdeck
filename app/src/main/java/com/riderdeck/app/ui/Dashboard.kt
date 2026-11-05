@@ -159,7 +159,7 @@ fun Dashboard(act: MainActivity) {
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         StatusRow(ride, dev)
                         MapPanel(ride, nav, act, open, Modifier.weight(1f).fillMaxWidth().enter(0))
-                        Row(Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth().height(216.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             SpeedPanel(ride, s, true, open, act, Modifier.weight(1.3f).fillMaxHeight().enter(1))
                             InfoPanel(ride, dev, true, Modifier.weight(1f).fillMaxHeight().enter(2))
                         }
@@ -323,20 +323,34 @@ fun SpeedPanel(ride: RideState, s: RiderSettings, compact: Boolean, open: (Strin
         modifier.panel().pressable { open("ride") }.padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        val lean: @Composable () -> Unit = {
             LeanGauge(ride.leanDeg) {
                 act.tracker.calibrateLean()
                 Hub.toast("Lean set to zero. Keep the bike upright")
             }
-            Spacer(Modifier.weight(1f))
+        }
+        val limitSign: @Composable () -> Unit = {
             Box(
-                Modifier.size(38.dp).clip(CircleShape).background(Color.White).border(4.dp, Color(0xFFE5383B), CircleShape),
+                Modifier.size(36.dp).clip(CircleShape).background(Color.White).border(4.dp, Color(0xFFE5383B), CircleShape),
                 contentAlignment = Alignment.Center,
             ) { Text("${s.alertSpeed}", color = Color(0xFF111111), fontWeight = FontWeight.Black, fontSize = 12.sp) }
         }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            val side = if (maxWidth < maxHeight * 1.15f) maxWidth else maxHeight * 1.15f
-            SpeedRing(ride.speedKmh, over, s.alertSpeed, Modifier.size(side))
+        if (!compact) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                lean()
+                Spacer(Modifier.weight(1f))
+                limitSign()
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                val side = if (maxWidth < maxHeight * 1.12f) maxWidth else maxHeight * 1.12f
+                SpeedRing(ride.speedKmh, over, s.alertSpeed, Modifier.size(side))
+            }
+            if (compact) {
+                Box(Modifier.align(Alignment.TopStart)) { lean() }
+                Box(Modifier.align(Alignment.TopEnd)) { limitSign() }
+            }
         }
         if (compact) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -436,8 +450,8 @@ fun SpeedRing(kmh: Float, over: Boolean, limit: Int, modifier: Modifier) {
             for (v in 0..140 step 10) {
                 val a = Math.toRadians(135.0 + 270.0 * v / 140)
                 val major = v % 20 == 0
-                val r1 = r - stroke * 1.35f
-                val r2 = r - stroke * (if (major) 2.15f else 1.75f)
+                val r1 = r - stroke * 1.2f
+                val r2 = r - stroke * (if (major) 1.85f else 1.55f)
                 drawLine(
                     if (major) p.muted.copy(alpha = 0.7f) else p.faint.copy(alpha = 0.6f),
                     Offset(c.x + r1 * cos(a).toFloat(), c.y + r1 * sin(a).toFloat()),
@@ -473,10 +487,10 @@ fun SpeedRing(kmh: Float, over: Boolean, limit: Int, modifier: Modifier) {
         val d = LocalDensity.current
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             RollingNumber(
-                kmh.roundToInt(), fontSize = with(d) { (side * 0.29f).toSp() },
+                kmh.roundToInt(), fontSize = with(d) { (side * 0.245f).toSp() },
                 color = if (over) p.bad else p.fg,
             )
-            Text("km/h", fontSize = with(d) { (side * 0.06f).toSp() }, color = p.muted, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+            Text("km/h", fontSize = with(d) { (side * 0.055f).toSp() }, color = p.muted, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -718,13 +732,13 @@ fun InfoPanel(ride: RideState, dev: DeviceState, compact: Boolean, modifier: Mod
                 Icon(weatherIcon(w.code, w.isDay), null, tint = tint, modifier = Modifier.size(22.dp))
                 Text(
                     w.tempC?.let { "${it.roundToInt()}°" } ?: "--°",
-                    fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 30.sp, maxLines = 1, softWrap = false,
+                    fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 26.sp, maxLines = 1, softWrap = false,
                 )
             }
             Text(if (w.tempC == null) "Weather" else Weather.describe(w.code), fontSize = 12.5.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(Icons.Rounded.Umbrella, null, tint = if (rain != null) p.warn else p.ok, modifier = Modifier.size(14.dp))
-                Text(rainText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (rain != null) p.warn else p.ok, maxLines = 2, lineHeight = 14.sp)
+                Text(rainText, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = if (rain != null) p.warn else p.ok, maxLines = 2, lineHeight = 14.sp)
             }
         }
     }
@@ -735,7 +749,7 @@ fun InfoPanel(ride: RideState, dev: DeviceState, compact: Boolean, modifier: Mod
                 VolumeKnob(Modifier.weight(1f).fillMaxWidth())
             }
         } else {
-            val knob = minOf(maxHeight, maxWidth * 0.56f)
+            val knob = minOf(maxHeight, maxWidth * 0.48f)
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 weather(Modifier.weight(1f))
                 VolumeKnob(Modifier.size(knob))

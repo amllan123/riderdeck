@@ -200,7 +200,7 @@ fun GoogleRiderMap(
         contentPadding = padding,
         properties = MapProperties(
             isBuildingEnabled = true,
-            isTrafficEnabled = true,
+            isTrafficEnabled = false,
             isMyLocationEnabled = false,
             mapStyleOptions = if (dark) night else day,
         ),

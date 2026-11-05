@@ -112,7 +112,7 @@ fun MapPanel(ride: RideState, nav: NavState, act: MainActivity, open: (String) -
         val h = maxHeight
         // While guiding, your arrow sits low on the screen so you see more road ahead (like Google Maps).
         val pad = if (ru.navigating && follow) {
-            val top = (h - bottomCard - 150.dp).coerceAtLeast(90.dp)
+            val top = (h - bottomCard - 110.dp).coerceAtLeast(90.dp)
             PaddingValues(top = top, bottom = bottomCard)
         } else {
             PaddingValues(top = 84.dp, bottom = bottomCard)
