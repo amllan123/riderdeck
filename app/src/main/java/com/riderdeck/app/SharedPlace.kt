@@ -66,7 +66,7 @@ object SharedPlace {
         val label = label(if (url != null) t.substringBefore(url) else "", subject)
         if (url == null) return search(ctx, t.lines().joinToString(", ") { it.trim() }.take(200))
 
-        var cur = url
+        var cur: String = url
         for (hop in 0 until 6) {
             coords(cur)?.let { (la, lo) -> return Pin(la, lo, label ?: nameFromUrl(cur) ?: "Shared place") }
             val c = URL(cur).openConnection() as HttpURLConnection
